@@ -123,17 +123,17 @@ impl Style {
     // Custom named styles. w/ a util to config them.
     pub fn heading(level: u8) -> TextStyle {
         if level <= 1 {
-            Self::H1()
+            Self::h1()
         } else if level == 2 {
-            Self::H2()
+            Self::h2()
         } else {
-            Self::H3()
+            Self::h3()
         }
     }
 
-    pub fn H1() -> TextStyle { Self::named("H1") }
-    pub fn H2() -> TextStyle { Self::named("H2") }
-    pub fn H3() -> TextStyle { Self::named("H3") }
+    pub fn h1() -> TextStyle { Self::named("H1") }
+    pub fn h2() -> TextStyle { Self::named("H2") }
+    pub fn h3() -> TextStyle { Self::named("H3") }
 
     /// The first H1 in a Gemtext is the page Title:
     pub fn Title() -> TextStyle { Self::named("Title") }
@@ -145,9 +145,9 @@ impl Style {
         let body_size = ctx.style().text_styles.get(&TextStyle::Body).expect("TextStyle::Body should always be present").size;
         ctx.all_styles_mut(|style| {
             style.text_styles.entry(Self::Title()).or_insert(FontId::new(body_size * 2.0, Proportional));
-            style.text_styles.entry(Self::H1()).or_insert(FontId::new(body_size * 2.0, Proportional));
-            style.text_styles.entry(Self::H2()).or_insert(FontId::new(body_size * 1.5, Proportional));
-            style.text_styles.entry(Self::H3()).or_insert(FontId::new(body_size * 1.2, Proportional));            
+            style.text_styles.entry(Self::h1()).or_insert(FontId::new(body_size * 2.0, Proportional));
+            style.text_styles.entry(Self::h2()).or_insert(FontId::new(body_size * 1.5, Proportional));
+            style.text_styles.entry(Self::h3()).or_insert(FontId::new(body_size * 1.2, Proportional));            
         });
     }
 }

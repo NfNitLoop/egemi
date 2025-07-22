@@ -27,3 +27,8 @@ When you visit a URL, eGemi will load only that URL.
 
  * HTTP(S) 1.1/2/3 support (TODO)
  * gemini protocol s upport. (TODO)
+ * Keyboard navigation (TODO)
+ * 
+
+
+ 
