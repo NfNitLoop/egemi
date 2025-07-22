@@ -79,6 +79,11 @@ impl Options {
                 continue;
             }
             if let Some(code) = &mut code {
+                let mut line = line.to_string();
+                if line.starts_with(" ") {
+                    // See: https://github.com/emilk/egui/issues/1272
+                    line = line.replacen(" ", "\u{a0}", 5);
+                }
                 code.lines.push(line.into());
                 continue;
             }

@@ -1,8 +1,14 @@
+mod gemtext;
+mod gemtext_widget;
+
 use eframe::{
-    egui::{self, Context, ScrollArea, TextEdit}, Frame, NativeOptions
+    egui::{self, Context, Link, RichText, ScrollArea, TextEdit, TextStyle, Widget}, Frame, NativeOptions
 };
 
-mod gemtext;
+use gemtext::Block;
+
+use crate::gemtext_widget::GemtextWidget;
+
 
 fn main() -> eframe::Result {
     let opts = NativeOptions {
@@ -22,7 +28,7 @@ fn main() -> eframe::Result {
 
 struct App {
     text: String,
-    rendered: String,
+    gemtext: GemtextWidget,
 }
 
 impl eframe::App for App {
@@ -34,10 +40,11 @@ impl eframe::App for App {
 
 
 impl App {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        gemtext_widget::Style::config(&cc.egui_ctx);
         Self {
             text: String::from("Edit me!"),
-            rendered: String::new(),
+            gemtext: GemtextWidget::default(),
         }
     }
 
@@ -66,7 +73,7 @@ impl App {
     
     fn left_pane_ui(&mut self, ui: &mut egui::Ui) {
         ScrollArea::vertical().id_salt("left").show(ui, |ui| {
-            let edit = TextEdit::multiline(&mut self.text);
+            let edit = TextEdit::multiline(&mut self.text).font(TextStyle::Monospace);
             let response = ui.add_sized(ui.available_size(), edit);
             if response.changed() {
                 self.rerender();
@@ -75,19 +82,26 @@ impl App {
     }
 
     fn right_pane_ui(&mut self, ui: &mut egui::Ui) {
+        // Render gemtext:
         ScrollArea::vertical().id_salt("right").show(ui, |ui| {
-            let mut readonly = self.rendered.as_str();
-            let edit = TextEdit::multiline(&mut readonly);
-            let response = ui.add_sized(ui.available_size(), edit);
+            self.gemtext.ui(ui);
         });
+
     }
 
     fn rerender(&mut self) {
         let result = gemtext::Options::default().parse(&self.text);
-        self.rendered = format!("{result:#?}")
+        if let Ok(blocks) = result {
+            self.gemtext.set_blocks(blocks);
+        } else {
+            self.gemtext.set_blocks(vec![
+                Block::Text(format!("Error parsing"))
+            ]);
+        }
     }
-
-
+    
+    
 
 }
+
 
