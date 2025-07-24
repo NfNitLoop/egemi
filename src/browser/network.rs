@@ -59,6 +59,7 @@ impl HttpLoader {
 
     async fn _fetch(client: reqwest::Client, url: String) -> Result<LoadedResource> {
         let response = client.get(&url)
+            .header("Accept", "text/gemini")
             .send()
             .await?;
 

@@ -4,7 +4,6 @@ use eframe::egui::{self, vec2, Button, Color32, Frame, Key, OpenUrl, ScrollArea,
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
-use url::ParseError;
 
 use crate::{browser::network::{self, HttpLoader, LoadedResource, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget};
 
@@ -202,6 +201,30 @@ impl Tab {
             },
         };
 
+
+
+        let is_gemtext = match &loaded.content_type {
+            None => {
+                // Not actually sure, but show text anyway?
+                true
+            },
+            Some(content) => {
+                content.starts_with("text/gemini")
+            }
+        };
+
+        if !is_gemtext {
+            let content = loaded.content_type.unwrap_or_else(|| "<unknown>".to_string().into());
+            let url = String::from("browser+") + &self.location.replace(" ", "%20"); // TODO: proper url encode.
+            let msg = format!("Content-Type: {content}\n")
+                + "is not yet supported.\n"
+                + &format!("=> {url} Open in browser?")
+            ;
+
+            self.set_gemtext(&msg);
+            return;
+        }
+
         let body = match loaded.body {
             network::Body::Bytes(_cow) => "binary data".into(),
             network::Body::Text(cow) => cow,
@@ -238,6 +261,7 @@ An egui browser for Gemini texts via http(s):// and gemini://
 
 ### See:
 => https://nfnitloop.com
+=> https://geminiprotocol.net
 
 ### See Also (TODO)
 => browser+https://github.com/nfnitloop/egemi TODO: @nfnitloop/egemi on GitHub
