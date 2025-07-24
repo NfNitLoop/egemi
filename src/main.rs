@@ -41,6 +41,7 @@ pub const CLAP_STYLING: Styles = Styles::styled()
 // ;
 
 type DynResult<T = ()> = Result<T,Box<dyn Error>>;
+type DynResultSend<T = ()> = Result<T, Box<dyn Error + Send>>;
 
 fn main() -> DynResult {
     let cli = Cli::parse();
@@ -51,7 +52,7 @@ fn main() -> DynResult {
         return Ok(());
     }
 
-    browser::main()?;
+    browser::main(url)?;
     Ok(())
 }
 

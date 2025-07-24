@@ -72,7 +72,7 @@ impl GemtextWidget {
                     let link = Link::new(visible);
                     let response = ui.add(link);
                     if response.clicked() {
-                        println!("clicked url: {url}") // TODO
+                        self.link_clicked = Some(url.clone());
                     }
                 },
             }

@@ -1,4 +1,5 @@
 //! A hacky little interactive gemtext editor.
+//! Mostly used to debug gemtext parsing/rendering.
 
 use eframe::{egui::{self, Context, ScrollArea, TextEdit, TextStyle}, Frame, NativeOptions};
 
