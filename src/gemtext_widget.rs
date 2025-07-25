@@ -10,9 +10,6 @@ pub struct GemtextWidget {
     // https://github.com/emilk/egui/issues/1272
     justify: bool,
 
-
-    keep_prefix_link: bool,
-
     link_clicked: Option<String>, // "url", but may not parse as such.
 }
 
@@ -28,8 +25,6 @@ impl GemtextWidget {
             link_clicked: self.link_clicked.take(),
         }
     }
-
-    /// Clear all state gathered by our render.
 
     fn render(&mut self, ui: &mut Ui) {
         let mut line_num: u32 = 0;
@@ -53,11 +48,11 @@ impl GemtextWidget {
                     ui.label(text);
                 },
                 Block::ListItem { text } => {
-                    let size = vec2(ui.available_width(), ui.text_style_height(&TextStyle::Body));
-                    let layout = Layout::left_to_right(Align::BOTTOM).with_main_wrap(true);
-                    ui.allocate_ui_with_layout(size, layout, |ui| {
-                        ui.label(" * "); // TODO
-                        ui.label(text);
+                    ui.horizontal_top(|ui| {
+                        ui.label(" • "); // TODO
+                        ui.vertical(|ui| {
+                            ui.label(text);
+                        })
                     });
                 },
                 Block::BlockQuote { lines } => {
