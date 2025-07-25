@@ -6,7 +6,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, HttpLoader, LoadedResource, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget};
+use crate::{browser::network::{self, http::HttpLoader, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -22,6 +22,9 @@ pub struct Tab {
 
     #[serde(skip)]
     loading: Option<JoinHandle<network::Result<LoadedResource>>>,
+
+    #[serde(skip)]
+    loader: MultiLoader
 }
 
 
@@ -111,8 +114,7 @@ impl Tab {
             return
         } 
         
-        let loader = Arc::new(HttpLoader::default());
-        let handle = loader.fetch(&url);
+        let handle = self.loader.fetch(url);
         self.loading = Some(handle);        
     }
 
@@ -257,9 +259,13 @@ impl Tab {
         match err {
             MissingContentType 
             | MimeParseError(_) 
-            | Unknown(_) => {},
-            UnsupportedContentType(mime) => {
-                let text = format!("## Unsupported Content-Type\n\n```\nContent-Type: {mime}\n```\n")
+            | UnsupportedUrlScheme(_)
+            | InvalidUrl(_)
+            | Unknown(_) => {
+                // Just show default error.
+            },
+            UnrequestedContentType(mime) => {
+                let text = format!("## Unrequested Content-Type\n\n```\nContent-Type: {mime}\n```\n")
                 + "=> browser+" + &self.encoded_location() + " Open in web browser";
                 self.set_gemtext(&text);
                 return;
@@ -297,7 +303,7 @@ An egui browser for Gemini texts via http(s):// and gemini://
 
 ### See:
 => https://nfnitloop.com
-=> https://geminiprotocol.net
+=> gemini://geminiprotocol.net/
 
 ### See Also (TODO)
 => browser+https://github.com/nfnitloop/egemi TODO: @nfnitloop/egemi on GitHub

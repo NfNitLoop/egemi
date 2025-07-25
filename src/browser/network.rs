@@ -1,12 +1,16 @@
 //! Handlers for fetching resources from the network.
 
+pub mod http;
+pub mod gemini;
+
 use std::{borrow::Cow, fmt::Display, sync::{Arc, LazyLock}, time::Duration};
 
 use mime::Mime;
 use reqwest::header::ToStrError;
 use tokio::{runtime::Runtime, task::JoinHandle};
+use url::Url;
 
-use crate::util::DisplayJoin as _;
+use crate::{browser::network::{gemini::GeminiLoader, http::HttpLoader}, util::DisplayJoin as _};
 
 // A global runtime to execute async tasks on.
 // The big benefit of async here is that tokio Tasks can be aborted at any time.
@@ -25,108 +29,37 @@ pub fn rt() -> Arc<Runtime> {
     RT.clone()
 }
 
-/// Knows how to load http/https.
-pub struct HttpLoader {
-    // TODO: Re-use a client to get HTTP/2 & 3 speedups.
-
-    max_size: Option<usize>,
-
-    // TODO: WHen we support multiple tabs, we could just make a global client? LazyLock.
-    client: reqwest::Client,
-
-    // Which content types to request. If we don't get one of these back, then error out fast.
-    accept_content_types: Vec<Mime>,
+#[derive(Default, Debug)]
+pub struct MultiLoader {
+    http: Arc<HttpLoader>,
+    gemini: Arc<GeminiLoader>,
 }
 
-impl Default for HttpLoader {
-    fn default() -> Self {
-        Self { 
-            max_size: Some(1024*1024 * 100), // 100 MiB
-            client: reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(10))
-                .user_agent(USER_AGENT)
-                .build()
-                .expect("Building reqwest client"),
-            accept_content_types: [
-                // See: https://developer.mozilla.org/en-US/docs/Glossary/Quality_values
-                "text/gemini; q=1",
-                "text/markdown; q=0.9",
-                "text/plain; q=0.8",
-                // TODO: text/html once we can scrape actual text out of it.
-            ].into_iter().map(|it| it.parse().expect("parsing mime")).collect(),
-        }
-    }
-}
-
-const USER_AGENT: &str = concat!(
-    "eGemi v", env!("CARGO_PKG_VERSION")
-);
-
-impl HttpLoader {
-    pub fn fetch(self: Arc<Self>, url: &str) -> JoinHandle<Result<LoadedResource>> {
-        let url = url.to_string();
-        let fut = self._fetch(url);
-        let rt = rt();
-        rt.spawn(fut)
-    }
-
-    async fn _fetch(self: Arc<Self>, url: String) -> Result<LoadedResource> {
-        let response = self.client.get(&url)
-            .header("Accept", self.accept_content_types.iter().join(","))
-            .send()
-            .await?;
-
-        let ctype = match response.headers().get("content-type") {
-            Some(header) => match header.to_str() {
-                Ok(str) => Some(str.to_owned()),
-                Err(err) => Err(err)?,
+impl MultiLoader {
+    pub fn fetch(&self, url: SCow) -> JoinHandle<Result<LoadedResource>> {
+        let parsed = match Url::parse(&url) {
+            Ok(ok) => ok,
+            Err(err) => {
+                return async_err(Error::InvalidUrl(url))
             },
-            None => None,
         };
-        let ctype = match ctype {
-            None => None,
-            Some(ctype) => {
-                Some(ctype.parse::<Mime>()?)
-            }
-        };
-
-        // TODO: Check too big.
-
-        // TODO: binary.
-        let length = response.content_length();
-        let status = Status::HttpStatus { 
-            code: response.status().as_u16()
-        };
-        
-        // For statuses like 301 or 404, we want to return the status code, and don't care
-        // so much about the content. But for OK responses, we expect the content to be a type we requested.
-        // If it's not, don't bother fetching it, return early.
-        if status.ok() {
-            let Some(mime) = &ctype else {
-                return Err(Error::MissingContentType);
-            };
-            let type_match = self.accept_content_types.iter().any(|mt| {
-                mt.essence_str() == mime.essence_str()
-            });
-            if !type_match {
-                Err(Error::UnsupportedContentType(mime.clone()))?;
-            }
+        if parsed.scheme() == "gemini" {
+            self.gemini.fetch(parsed)
+        } else if parsed.scheme() == "http" || parsed.scheme() == "https" {
+            self.http.fetch(&url)
+        } else {
+            async_err(Error::UnsupportedUrlScheme(parsed))
         }
-
-        let text = response.text().await?;
-
-
-        let resource = LoadedResource {
-            body: Body::Text(text.into()), 
-            content_type: ctype.map(Into::into),
-            length,
-            status,
-            url: url.into(),
-        };
-
-        Ok(resource)
     }
 }
+
+fn async_err(err: Error) -> JoinHandle<Result<LoadedResource>> {
+    rt().spawn( async move {
+        Err(err)
+    })
+}
+
+
 
 // TODO: Worth using a strings/bytes crate for these?
 pub type SCow = Cow<'static, str>;
@@ -190,11 +123,18 @@ pub enum Error {
     #[error("Unknown error {0}")]
     Unknown(String),
 
-    #[error("Unsupported Content-Type: {0}")]
-    UnsupportedContentType(Mime),
+    #[error("Unsupported URL scheme: {0}")]
+    UnsupportedUrlScheme(Url),
+
+    /// The web server returned a content type we didn't request.
+    #[error("Unrequested Content-Type: {0}")]
+    UnrequestedContentType(Mime),
 
     #[error("Missing Content-Type")]
     MissingContentType,
+
+    #[error("Invalid URL: {0}")]
+    InvalidUrl(SCow),
 
     #[error("Error parsing mime type {0}")]
     MimeParseError(#[from] mime::FromStrError),
