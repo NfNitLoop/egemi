@@ -1,4 +1,5 @@
 use core::f32;
+use std::sync::Arc;
 
 use eframe::egui::{self, vec2, Button, Color32, Frame, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
 use reqwest::Url;
@@ -110,7 +111,7 @@ impl Tab {
             return
         } 
         
-        let loader = HttpLoader::default();
+        let loader = Arc::new(HttpLoader::default());
         let handle = loader.fetch(&url);
         self.loading = Some(handle);        
     }
@@ -195,30 +196,41 @@ impl Tab {
         let loaded = match result {
             Ok(ok) => ok,
             Err(err) => {
-                let msg = format!("{err:#?}");
-                self.set_gemtext(&msg);
+                self.render_err(err);
                 return;
             },
         };
 
+        if !loaded.status.ok() {
+            let status = &loaded.status;
+            let text = format!("## {status}") 
+                + "\n"
+                + "\nSee:"
+                + "\n=> https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status";
+            self.set_gemtext(&text);
+            return;
+        }
 
 
-        let is_gemtext = match &loaded.content_type {
+
+        let is_text = match &loaded.content_type {
             None => {
                 // Not actually sure, but show text anyway?
                 true
             },
             Some(content) => {
-                content.starts_with("text/gemini")
+                content.type_().as_str() == "text"
             }
         };
 
-        if !is_gemtext {
-            let content = loaded.content_type.unwrap_or_else(|| "<unknown>".to_string().into());
-            let url = String::from("browser+") + &self.location.replace(" ", "%20"); // TODO: proper url encode.
-            let msg = format!("Content-Type: {content}\n")
-                + "is not yet supported.\n"
-                + &format!("=> {url} Open in browser?")
+        if !is_text {
+            let content = loaded.content_type
+                .map(|it| format!("{it}"))
+                .unwrap_or_else(|| format!("<unknown>"));
+            let msg = format!("## Unsupported Content-Type\n\n")
+                + &format!("Content-Type: {content}\n")
+                + "is not yet supported.\n\n"
+                + "=> browser+" + &self.encoded_location() + " Open in browser?"
             ;
 
             self.set_gemtext(&msg);
@@ -238,6 +250,30 @@ impl Tab {
             return false;
         };
         !loading.is_finished()
+    }
+    
+    fn render_err(&mut self, err: network::Error){
+        use network::Error::*;
+        match err {
+            MissingContentType 
+            | MimeParseError(_) 
+            | Unknown(_) => {},
+            UnsupportedContentType(mime) => {
+                let text = format!("## Unsupported Content-Type\n\n```\nContent-Type: {mime}\n```\n")
+                + "=> browser+" + &self.encoded_location() + " Open in web browser";
+                self.set_gemtext(&text);
+                return;
+            },
+        };
+        
+        let msg = format!("{err:#?}");
+        self.set_gemtext(&msg);
+        return;
+    }
+
+    fn encoded_location(&self) -> String {
+        // TODO: Proper URLencode. Avoid if unnecessary.
+        self.location.replace(" ", "%20")
     }
 
 }

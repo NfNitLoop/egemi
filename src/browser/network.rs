@@ -1,9 +1,12 @@
 //! Handlers for fetching resources from the network.
 
-use std::{borrow::Cow, sync::{Arc, LazyLock}, time::Duration};
+use std::{borrow::Cow, fmt::Display, sync::{Arc, LazyLock}, time::Duration};
 
+use mime::Mime;
 use reqwest::header::ToStrError;
 use tokio::{runtime::Runtime, task::JoinHandle};
+
+use crate::util::DisplayJoin as _;
 
 // A global runtime to execute async tasks on.
 // The big benefit of async here is that tokio Tasks can be aborted at any time.
@@ -30,6 +33,9 @@ pub struct HttpLoader {
 
     // TODO: WHen we support multiple tabs, we could just make a global client? LazyLock.
     client: reqwest::Client,
+
+    // Which content types to request. If we don't get one of these back, then error out fast.
+    accept_content_types: Vec<Mime>,
 }
 
 impl Default for HttpLoader {
@@ -41,6 +47,13 @@ impl Default for HttpLoader {
                 .user_agent(USER_AGENT)
                 .build()
                 .expect("Building reqwest client"),
+            accept_content_types: [
+                // See: https://developer.mozilla.org/en-US/docs/Glossary/Quality_values
+                "text/gemini; q=1",
+                "text/markdown; q=0.9",
+                "text/plain; q=0.8",
+                // TODO: text/html once we can scrape actual text out of it.
+            ].into_iter().map(|it| it.parse().expect("parsing mime")).collect(),
         }
     }
 }
@@ -50,16 +63,16 @@ const USER_AGENT: &str = concat!(
 );
 
 impl HttpLoader {
-    pub fn fetch(&self, url: &str) -> JoinHandle<Result<LoadedResource>> {
+    pub fn fetch(self: Arc<Self>, url: &str) -> JoinHandle<Result<LoadedResource>> {
         let url = url.to_string();
-        let fut = Self::_fetch(self.client.clone(), url);
+        let fut = self._fetch(url);
         let rt = rt();
         rt.spawn(fut)
     }
 
-    async fn _fetch(client: reqwest::Client, url: String) -> Result<LoadedResource> {
-        let response = client.get(&url)
-            .header("Accept", "text/gemini")
+    async fn _fetch(self: Arc<Self>, url: String) -> Result<LoadedResource> {
+        let response = self.client.get(&url)
+            .header("Accept", self.accept_content_types.iter().join(","))
             .send()
             .await?;
 
@@ -70,6 +83,12 @@ impl HttpLoader {
             },
             None => None,
         };
+        let ctype = match ctype {
+            None => None,
+            Some(ctype) => {
+                Some(ctype.parse::<Mime>()?)
+            }
+        };
 
         // TODO: Check too big.
 
@@ -77,9 +96,25 @@ impl HttpLoader {
         let length = response.content_length();
         let status = Status::HttpStatus { 
             code: response.status().as_u16()
-        }; 
+        };
+        
+        // For statuses like 301 or 404, we want to return the status code, and don't care
+        // so much about the content. But for OK responses, we expect the content to be a type we requested.
+        // If it's not, don't bother fetching it, return early.
+        if status.ok() {
+            let Some(mime) = &ctype else {
+                return Err(Error::MissingContentType);
+            };
+            let type_match = self.accept_content_types.iter().any(|mt| {
+                mt.essence_str() == mime.essence_str()
+            });
+            if !type_match {
+                Err(Error::UnsupportedContentType(mime.clone()))?;
+            }
+        }
+
         let text = response.text().await?;
-        ;
+
 
         let resource = LoadedResource {
             body: Body::Text(text.into()), 
@@ -106,7 +141,7 @@ pub  struct LoadedResource {
 
     // TODO: headers
     pub length: Option<u64>,
-    pub content_type: Option<SCow>,
+    pub content_type: Option<Arc<Mime>>,
 
     // TODO: 
     pub body: Body
@@ -120,6 +155,16 @@ pub  struct LoadedResource {
 pub enum Status {
     HttpStatus {
         code: u16,
+    }
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::HttpStatus { code } => {
+                write!(f, "HTTP {code}")
+            },
+        }
     }
 }
 
@@ -143,7 +188,16 @@ pub enum Body {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Unknown error {0}")]
-    Unknown(String)
+    Unknown(String),
+
+    #[error("Unsupported Content-Type: {0}")]
+    UnsupportedContentType(Mime),
+
+    #[error("Missing Content-Type")]
+    MissingContentType,
+
+    #[error("Error parsing mime type {0}")]
+    MimeParseError(#[from] mime::FromStrError),
 }
 
 impl From<reqwest::Error> for Error {

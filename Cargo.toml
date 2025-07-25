@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.41", features = ["derive"] }
 eframe = { version = "0.32.0", features = ["persistence"] }
+mime = "0.3.17"
 regex = "1.11.1"
 reqwest = "0.12.22"
 serde = { version = "1.0.219", features = ["derive"] }

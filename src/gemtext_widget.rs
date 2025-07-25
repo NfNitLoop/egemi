@@ -37,11 +37,12 @@ impl GemtextWidget {
             line_num += 1;
             match block {
                 Block::Heading { level, text } => {
-                    let style = if line_num == 1 { Style::Title() } else { Style::heading(*level) };
+                    let is_title = line_num == 1 && *level == 1;
+                    let style = if is_title { Style::Title() } else { Style::heading(*level) };
                     let rt = RichText::new(text).text_style(style).strong();
-                    if line_num == 1 {
-                        let layout: Layout = Layout::top_down(Align::TOP).with_cross_align(Align::Center);
-                        ui.with_layout(layout, |ui| {
+                    if is_title {
+                        let layout: Layout = Layout::top_down(Align::Center);
+                        ui.vertical_centered(|ui| {
                             ui.label(rt);
                         });
                     } else {
