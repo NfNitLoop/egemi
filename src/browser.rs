@@ -3,6 +3,7 @@ mod network;
 mod tab;
 
 use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Color32, FontData, FontFamily, Frame, MenuBar, TopBottomPanel}, epaint::text::{FontInsert, InsertFontFamily}, App, NativeOptions};
+use egui_extras::install_image_loaders;
 use serde::{Deserialize, Serialize};
 
 use crate::{browser::{fonts::load_fonts, tab::Tab}, gemtext_widget::{self, GemtextWidget}, DynResult};
@@ -34,6 +35,7 @@ struct Browser {
 
 impl Browser {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        install_image_loaders(&cc.egui_ctx);
         load_fonts(cc);
 
         // TODO: Better themes:

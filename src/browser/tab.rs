@@ -1,12 +1,12 @@
 use core::f32;
 
-use eframe::egui::{self, style::ScrollAnimation, text::{CCursor, CCursorRange}, vec2, Align2, Button, Color32, Frame, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
+use eframe::egui::{self, style::ScrollAnimation, text::{CCursor, CCursorRange}, vec2, Align2, Button, Color32, Frame, Image, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
 use egui_flex::{item, FlexAlign, FlexAlignContent};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, widgets::textbox::TextBox};
+use crate::{browser::network::{self, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg, widgets::textbox::TextBox};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -32,9 +32,6 @@ pub struct Tab {
     #[serde(skip)]
     scroll_to_top: bool,
 }
-
-
-
 
 impl Tab {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -86,13 +83,16 @@ impl Tab {
             ;
             flex.show(ui, |ui| {
                 let back_enabled = self.history.len() > 1;
-
-                ui.add_ui(item(), |ui| {
-                    let button = ui.add_enabled(back_enabled, Button::new("⬅"));
-                    if button.clicked() {
-                        self.go_back();
-                    }
-                });
+                let back_svg = Image::new(svg::back())
+                    .max_height(18.0)
+                    .tint(
+                        // Match dark/light(/etc) theme.
+                        ui.visuals().text_color()
+                    );
+                let button = ui.add(item().enabled(back_enabled), Button::new(back_svg));
+                if button.clicked() {
+                    self.go_back();
+                }
 
                 let is_loading = self.is_loading();
                 let mut textbox = TextBox::new(self.location.to_mut())

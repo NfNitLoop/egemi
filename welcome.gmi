@@ -3,32 +3,40 @@ An egui browser for Gemini Text ("Gemtext") files.
 
 eGemi's main differentiator from other Gemini browsers is that it can also read gemtext from HTTP!
 
-This is the result of my thinking from:
-=> https://www.nfnitloop.com/blog/2025/06/project-gemini/ Thoughts on Project Gemini
-
 ## Features
 * Can read gemtext over HTTP(S) as well as Gemini protocol.
 * Sends HTTP Accept headers requesting text/gemtext, text/markdown, and text/plain.
+* Single executable you can launch from the CLI.
+* Self-contained Rust application you can `cargo build` and `run` yourself.
+* Emoji! 🎉
+* CJK support: 日本語, 한국어, 简体中文, 繁體中文
 
 ## Intentionally Missing Features
-While using HTTP, we can maintain some of the benefits of using Gemini Protocol by just not implementing the parts of HTTP that are abused:
+While using HTTP, we can maintain some of the benefits of using Gemini Protocol by not implementing the parts of HTTP that are abused:
 * HTTP Cookies (No tracking)
 * JavaScript (No popups)
 * Loading secondary resources on a page, like CSS, Images, fonts, etc. (No tracking pixels, or cross-site cookies.)
-* Automatic redirects (click tracking)
+* Automatic redirects (makes attempted click tracking obvious.)
+
+## Upcoming Features
+* Allow browsing local gemtext files.
+* A reload button! 🔃 😅
+* Read a local bookmarks.gmi or home.gmi for quick access to common sites.
 
 ## Possible Future Features
-* Read a local bookmarks.gmi or home.gmi for quick access to common sites.
 * Multiple browser tabs.
 * Render a safe subset of Markdown. (Currently gets parsed/rendered as Gemtext. YMMV.)
 * Options for Gemtext rendering. (ex: show more/less native syntax.) 
 * Nicer and/or customizable themes. Maybe per-domain. Right now, we've got egui's built-in light/dark themes.
 * Caching (likely only in-memory.) 
 * Rendering of simple HTML. (think: "Reader" mode from iOS Safari.)
-* RSS support.
+* RSS/(/gemlog/twtxt?) support.
 
 ### See:
-=> https://raw.githubusercontent.com/NfNitLoop/gemi/refs/heads/main/README.md Gemi
 => browser+https://github.com/nfnitloop/egemi @nfnitloop/egemi on GitHub
-=> https://nfnitloop.com
 => gemini://geminiprotocol.net/
+
+### Author Links:
+=> https://nfnitloop.com
+=> https://www.nfnitloop.com/blog/2025/06/project-gemini/ Thoughts on Project Gemini (Blog Post)
+=> https://raw.githubusercontent.com/NfNitLoop/gemi/refs/heads/main/README.md Gemi (Serve Gemtext via HTTP(S))

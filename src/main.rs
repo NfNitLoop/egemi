@@ -3,6 +3,7 @@ mod editor;
 mod gemtext;
 mod gemtext_widget;
 mod widgets;
+mod svg;
 mod util;
 
 use std::error::Error;

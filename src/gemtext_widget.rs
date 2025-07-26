@@ -48,7 +48,7 @@ impl GemtextWidget {
                 },
                 Block::ListItem { text } => {
                     ui.horizontal_top(|ui| {
-                        ui.label(" • "); // TODO
+                        ui.label(" •");
                         ui.vertical(|ui| {
                             ui.label(text);
                         })
