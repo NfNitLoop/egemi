@@ -1,12 +1,12 @@
 use core::f32;
 use std::sync::Arc;
 
-use eframe::egui::{self, vec2, Button, Color32, Frame, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
+use eframe::egui::{self, style::ScrollAnimation, text::{CCursor, CCursorRange}, vec2, Button, Color32, Frame, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, http::HttpLoader, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget};
+use crate::{browser::network::{self, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -24,7 +24,13 @@ pub struct Tab {
     loading: Option<JoinHandle<network::Result<LoadedResource>>>,
 
     #[serde(skip)]
-    loader: MultiLoader
+    loader: MultiLoader,
+
+    #[serde(skip)]
+    shortcuts: Shortcuts,
+
+    #[serde(skip)]
+    scroll_to_top: bool,
 }
 
 
@@ -47,6 +53,10 @@ impl Tab {
             ScrollArea::vertical()
                 // .id_salt(&self.location) // No effect?
                 .show(ui, |ui| {
+                    if self.scroll_to_top {
+                        ui.scroll_to_cursor_animation(None, ScrollAnimation::none());
+                        self.scroll_to_top = false;
+                    }
                     let response = self.document.ui(ui);
                     if let Some(url) = response.link_clicked {
                         self.link_clicked(ui, url);
@@ -80,19 +90,27 @@ impl Tab {
                 if is_loading {
                     ui.spinner();
                 }
-                let textbox = TextEdit::singleline(&mut self.location)
-                    .desired_width(f32::INFINITY);
-
-                let loc = ui.add_enabled(!is_loading, textbox);
-                if loc.lost_focus() { // user pressed enter OR tabbed away.
-                    if ui.input(|i| i.key_pressed(Key::Enter)) {
-                        self.goto_url(self.location.clone());
-                    } else {
-                        if let Some(url) = self.history.last().map(Clone::clone) {
-                            self.location = url;
+                
+                ui.add_enabled_ui(!is_loading, |ui| {
+                    let textbox = TextEdit::singleline(&mut self.location)
+                        .desired_width(f32::INFINITY);
+                    let mut loc = textbox.show(ui);
+                    
+                    if loc.response.lost_focus() { // user pressed enter OR tabbed away.
+                        if ui.input(|i| i.key_pressed(Key::Enter)) {
+                            self.goto_url(self.location.clone());
+                        } else {
+                            if let Some(url) = self.history.last().map(Clone::clone) {
+                                self.location = url;
+                            }
                         }
-                    }
-                }
+                    } else if self.shortcuts.location_bar(ui) {
+                        loc.response.request_focus();
+                        select_all(loc, &mut self.location, ui);
+                    };
+                });
+
+                
             });
         });    
 
@@ -113,7 +131,7 @@ impl Tab {
         if url == BuiltinUrl::ABOUT {
             self.set_gemtext(ABOUT_EGEMI.trim_start());
             return
-        } 
+        }
         
         let handle = self.loader.fetch(url);
         self.loading = Some(handle);        
@@ -167,6 +185,13 @@ impl Tab {
             },
         };
         self.document.set_blocks(blocks);
+        self.scroll_to_top = true;
+    }
+
+    fn set_plaintext(&mut self, text: &str) {
+        let blocks: Vec<Block> = text.lines().map(|line| Block::Text(line.into())).collect();
+        self.document.set_blocks(blocks);
+        self.scroll_to_top = true;
     }
     
     /// Check if any async tasks completed. Right now, this is just whether a page loaded.
@@ -184,8 +209,8 @@ impl Tab {
             loading.await
         };
         
-        let rt = tokio::runtime::Builder::new_current_thread().build().expect("current-thread");
-        let result = rt.block_on(fut);
+        // We expect this not to block (long) because the task is finished already:
+        let result = rt().block_on(fut);
 
         let result = match result {
             Ok(ok) => ok,
@@ -245,7 +270,12 @@ impl Tab {
             network::Body::Text(cow) => cow,
         };
 
-        self.set_gemtext(&body);
+        let is_gemtext = loaded.content_type.map(|it| it.essence_str() == "text/gemini").unwrap_or(false);
+        if is_gemtext {
+            self.set_gemtext(&body);
+        } else {
+            self.set_plaintext(&body);
+        }
     }
     
     fn is_loading(&self) -> bool {
@@ -285,6 +315,19 @@ impl Tab {
 
 }
 
+// This feels like such a hack!
+fn select_all(output: egui::text_edit::TextEditOutput, text: &str, ui: &mut egui::Ui) {
+    let range = 0..text.len();
+    let mut output = output;
+    output.state.cursor.set_char_range(Some(CCursorRange {
+        // Note! "primary" is where selection "ended" and will be where the cursor appears.
+        secondary: CCursor { index: range.start, prefer_next_row: true },
+        primary: CCursor { index: range.end, prefer_next_row: true },
+        h_pos: None
+    }));
+    output.state.store(ui.ctx(), output.response.id);
+}
+
 fn url_join(location: &str, url: &str) -> Result<Url, ()> {
     let base = Url::parse(location).map_err(|_| ())?;
     let joined = base.join(url).map_err(|_| ())?;
@@ -297,44 +340,19 @@ impl BuiltinUrl {
 }
 
 
-const ABOUT_EGEMI: &str = r#"
-# eGemi
+const ABOUT_EGEMI: &str = include_str!("../../welcome.gmi");
 
-An egui browser for Gemini Text ("Gemtext") files.
 
-eGemi's main differentiator from other Gemini browsers is that it can also read gemtext from HTTP!
+/// A place to check whether keyboard shortcuts were pressed.
+/// May be configurable in the future.
+#[derive(Default, Debug)]
+struct Shortcuts;
 
-This is the result of my thinking from:
-=> https://www.nfnitloop.com/blog/2025/06/project-gemini/ Thoughts on Project Gemini
-
-## Features
-
-* Can read gemtext over HTTP(S) as well as Gemini protocol.
-* Sends HTTP Accept headers requesting text/gemtext, text/markdown, and text/plain.
-
-## Intentionally Missing Features
-
-While using HTTP, we can maintain some of the benefits of using Gemini Protocol by just not implementing the parts of HTTP that are abused:
-
-* HTTP Cookies (No tracking)
-* JavaScript (No popups)
-* Loading secondary resources on a page, like CSS, Images, fonts, etc. (No tracking pixels, or cross-site cookies.)
-* Automatic redirects (click tracking)
-
-## Possible Future Features
-
-* Read a local bookmarks.gmi or home.gmi for quick access to common sites.
-* Multiple browser tabs.
-* Render a safe subset of Markdown. (Currently gets parsed/rendered as Gemtext. YMMV.)
-* Options for Gemtext rendering. (ex: show more/less native syntax.) 
-* Nicer and/or customizable themes. Maybe per-domain. Right now, we've got egui's built-in light/dark themes.
-* Caching (likely only in-memory.) 
-* Rendering of simple HTML. (think: "Reader" mode from iOS Safari.)
-* RSS support.
-
-### See:
-=> https://raw.githubusercontent.com/NfNitLoop/gemi/refs/heads/main/README.md Gemi
-=> browser+https://github.com/nfnitloop/egemi @nfnitloop/egemi on GitHub
-=> https://nfnitloop.com
-=> gemini://geminiprotocol.net/
-"#;
+impl Shortcuts {
+    fn location_bar(&self, ui: &egui::Ui) -> bool {
+        ui.input(|i| {
+            i.key_pressed(Key::L)
+            && (i.modifiers.ctrl || i.modifiers.command)
+        })
+    }
+}

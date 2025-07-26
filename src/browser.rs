@@ -1,10 +1,11 @@
+pub mod fonts;
 mod network;
 mod tab;
 
-use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Color32, Frame, MenuBar, TopBottomPanel}, App, NativeOptions};
+use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Color32, FontData, FontFamily, Frame, MenuBar, TopBottomPanel}, epaint::text::{FontInsert, InsertFontFamily}, App, NativeOptions};
 use serde::{Deserialize, Serialize};
 
-use crate::{browser::tab::Tab, gemtext_widget::{self, GemtextWidget}, DynResult};
+use crate::{browser::{fonts::load_fonts, tab::Tab}, gemtext_widget::{self, GemtextWidget}, DynResult};
 
 pub fn main(url: String) -> eframe::Result {
     let opts = NativeOptions {
@@ -33,7 +34,8 @@ struct Browser {
 
 impl Browser {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // TODO: Load more fonts.
+        load_fonts(cc);
+
         // TODO: Better themes:
         gemtext_widget::Style::config(&cc.egui_ctx);
 
@@ -60,6 +62,8 @@ impl Browser {
         });
     }
 }
+
+
 
 impl App for Browser {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {

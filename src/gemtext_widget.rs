@@ -33,10 +33,9 @@ impl GemtextWidget {
             match block {
                 Block::Heading { level, text } => {
                     let is_title = line_num == 1 && *level == 1;
-                    let style = if is_title { Style::Title() } else { Style::heading(*level) };
+                    let style = if is_title { Style::title() } else { Style::heading(*level) };
                     let rt = RichText::new(text).text_style(style).strong();
                     if is_title {
-                        let layout: Layout = Layout::top_down(Align::Center);
                         ui.vertical_centered(|ui| {
                             ui.label(rt);
                         });
@@ -60,7 +59,9 @@ impl GemtextWidget {
                 },
                 Block::CodeFence { meta, lines } => {
                     for line in lines {
-                        ui.monospace(line);
+                        // ui.monospace(line);
+                        let rt = RichText::new(line).text_style(Style::mono());
+                        ui.label(rt);
                     }
                 },
                 Block::Link { url, text } => {
@@ -70,6 +71,9 @@ impl GemtextWidget {
                     if response.clicked() {
                         self.link_clicked = Some(url.clone());
                     }
+                    response.on_hover_ui(|ui| {
+                        ui.monospace(url);
+                    });
                 },
             }
         }
@@ -130,20 +134,22 @@ impl Style {
     pub fn h1() -> TextStyle { Self::named("H1") }
     pub fn h2() -> TextStyle { Self::named("H2") }
     pub fn h3() -> TextStyle { Self::named("H3") }
+    pub fn mono() -> TextStyle { Self::named("gemtext-mono") }
 
     /// The first H1 in a Gemtext is the page Title:
-    pub fn Title() -> TextStyle { Self::named("Title") }
+    pub fn title() -> TextStyle { Self::named("Title") }
 
     fn named(name: &str) -> TextStyle { TextStyle::Name(name.into()) }
 
     pub fn config(ctx: &egui::Context) {
-        use egui::FontFamily::Proportional;
+        use egui::FontFamily::{Proportional, Monospace};
         let body_size = ctx.style().text_styles.get(&TextStyle::Body).expect("TextStyle::Body should always be present").size;
         ctx.all_styles_mut(|style| {
-            style.text_styles.entry(Self::Title()).or_insert(FontId::new(body_size * 2.0, Proportional));
+            style.text_styles.entry(Self::title()).or_insert(FontId::new(body_size * 2.0, Proportional));
             style.text_styles.entry(Self::h1()).or_insert(FontId::new(body_size * 2.0, Proportional));
             style.text_styles.entry(Self::h2()).or_insert(FontId::new(body_size * 1.5, Proportional));
             style.text_styles.entry(Self::h3()).or_insert(FontId::new(body_size * 1.2, Proportional));            
+            style.text_styles.entry(Self::mono()).or_insert(FontId::new(body_size * 0.8, Monospace));            
         });
     }
 }

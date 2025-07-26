@@ -3,7 +3,7 @@
 
 use eframe::{egui::{self, Context, ScrollArea, TextEdit, TextStyle}, Frame, NativeOptions};
 
-use crate::{gemtext::{self, Block}, gemtext_widget::{self, GemtextWidget}};
+use crate::{browser::fonts::load_fonts, gemtext::{self, Block}, gemtext_widget::{self, GemtextWidget}};
 
 pub fn main() -> eframe::Result {
     let opts = NativeOptions {
@@ -37,9 +37,10 @@ impl eframe::App for App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        load_fonts(cc);
         gemtext_widget::Style::config(&cc.egui_ctx);
         Self {
-            text: String::from("Edit me!"),
+            text: String::from("Edit me! 😅 ✅\nこれは日本語ですよ！\nXièxiè (谢谢)"),
             gemtext: GemtextWidget::default(),
         }
     }

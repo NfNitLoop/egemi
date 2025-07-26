@@ -33,9 +33,6 @@ impl GeminiLoader {
         };
 
         let ctype: Mime = response.meta().parse()?;
-        if ctype.essence_str() != "text/gemini" {
-            return Err(Error::UnrequestedContentType(ctype));
-        }
 
         Ok(LoadedResource {
             status,
