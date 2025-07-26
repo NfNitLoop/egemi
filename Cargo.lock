@@ -914,6 +914,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "eframe",
+ "egui_flex",
  "germ",
  "mime",
  "regex",
@@ -983,6 +984,15 @@ dependencies = [
  "web-time",
  "webbrowser",
  "winit",
+]
+
+[[package]]
+name = "egui_flex"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b388984b540ccaf64452c2cb3856026f50b996e5a7c7412d1d011d13a358b51"
+dependencies = [
+ "egui",
 ]
 
 [[package]]

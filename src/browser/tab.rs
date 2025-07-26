@@ -1,12 +1,12 @@
 use core::f32;
-use std::sync::Arc;
 
-use eframe::egui::{self, style::ScrollAnimation, text::{CCursor, CCursorRange}, vec2, Button, Color32, Frame, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
+use eframe::egui::{self, style::ScrollAnimation, text::{CCursor, CCursorRange}, vec2, Align2, Button, Color32, Frame, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
+use egui_flex::{item, FlexAlign, FlexAlignContent};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget};
+use crate::{browser::network::{self, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, widgets::textbox::TextBox};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -74,45 +74,49 @@ impl Tab {
             .shadow(Shadow::default())
         ;
 
-        // Don't pad before next item:
-        let old_padding = ui.style().spacing.item_spacing.clone();     
+        // Don't pad between location bar & document body:
+        let old_spacing = ui.style().spacing.item_spacing.clone();
         ui.style_mut().spacing.item_spacing = vec2(0.0, 0.0);
 
-
         frame.show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.style_mut().spacing.item_spacing = old_padding;    
+            let flex = egui_flex::Flex::horizontal()
+                .w_full()
+                .align_content(FlexAlignContent::Stretch)
+                .gap(old_spacing.clone())
+            ;
+            flex.show(ui, |ui| {
                 let back_enabled = self.history.len() > 1;
-                if ui.add_enabled(back_enabled, Button::new("⬅")).clicked() {
-                    self.go_back();
-                }
-                let is_loading = self.is_loading();
-                if is_loading {
-                    ui.spinner();
-                }
-                
-                ui.add_enabled_ui(!is_loading, |ui| {
-                    let textbox = TextEdit::singleline(&mut self.location)
-                        .desired_width(f32::INFINITY);
-                    let mut loc = textbox.show(ui);
-                    
-                    if loc.response.lost_focus() { // user pressed enter OR tabbed away.
-                        if ui.input(|i| i.key_pressed(Key::Enter)) {
-                            self.goto_url(self.location.clone());
-                        } else {
-                            if let Some(url) = self.history.last().map(Clone::clone) {
-                                self.location = url;
-                            }
-                        }
-                    } else if self.shortcuts.location_bar(ui) {
-                        loc.response.request_focus();
-                        select_all(loc, &mut self.location, ui);
-                    };
+
+                ui.add_ui(item(), |ui| {
+                    let button = ui.add_enabled(back_enabled, Button::new("⬅"));
+                    if button.clicked() {
+                        self.go_back();
+                    }
                 });
 
-                
+                let is_loading = self.is_loading();
+                let mut textbox = TextBox::new(self.location.to_mut())
+                    .enabled(!is_loading);
+                ui.add_widget(item().grow(1.0), &mut textbox);
+                if textbox.enter_pressed(ui.ui()) {
+                    self.goto_url(self.location.clone());
+                } else if textbox.lost_focus() {
+                    if let Some(url) = self.history.last().map(Clone::clone) {
+                        // !!! I'm surprised I can do this while textbox still has location.to_mut()!?!?
+                        self.location = url;
+                    }
+                } else if self.shortcuts.location_bar(ui.ui()) {
+                    textbox.select_all(ui.ui());
+                    textbox.request_focus();
+                };
+
+                if is_loading {
+                    ui.add_ui(item(), |ui| ui.spinner() );
+                }              
             });
-        });    
+        });
+
+        ui.style_mut().spacing.item_spacing = old_spacing;    
 
     }
 

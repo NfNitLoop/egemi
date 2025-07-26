@@ -2,6 +2,7 @@ mod browser;
 mod editor;
 mod gemtext;
 mod gemtext_widget;
+mod widgets;
 mod util;
 
 use std::error::Error;
