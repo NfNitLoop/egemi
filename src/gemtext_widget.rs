@@ -1,4 +1,4 @@
-use eframe::{egui::{self, vec2, FontId, Frame, Link, RichText, TextStyle, Ui, UiBuilder}, epaint::MarginF32};
+use eframe::{egui::{self, vec2, FontId, Frame, Link, RichText, TextStyle, Ui, UiBuilder, Vec2}, epaint::MarginF32};
 
 use crate::gemtext::Block;
 
@@ -96,9 +96,7 @@ fn block_quote(ui: &mut Ui, lines: &Vec<Block>) {
     let left_margin = MarginF32{ left: row_height / 2.0, ..Default::default() };
     let response = ui.scope_builder(builder, |ui| {
         let frame = Frame::new()
-            // Draw border right between these?:
-            .outer_margin(left_margin)
-            .inner_margin(left_margin);
+            .outer_margin(left_margin);
         frame.show(ui, |ui| {
             for line in lines {
                 if let Block::Text(line) = line {
@@ -109,9 +107,8 @@ fn block_quote(ui: &mut Ui, lines: &Vec<Block>) {
 
     });
     let rect = response.response.rect;
-    let left_bump = vec2(left_margin.left, 0.0);
     ui.painter().line_segment(
-        [rect.left_top() +left_bump, rect.left_bottom() + left_bump],
+        [rect.left_top(), rect.left_bottom()],
         (1.0, ui.visuals().weak_text_color()),
     );
 }
