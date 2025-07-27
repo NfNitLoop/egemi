@@ -4,12 +4,12 @@ mod tab;
 
 use std::path::PathBuf;
 
-use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Color32, FontData, FontFamily, Frame, MenuBar, TopBottomPanel}, epaint::text::{FontInsert, InsertFontFamily}, App, NativeOptions};
+use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Frame, MenuBar, TopBottomPanel}, App, NativeOptions};
 use egui_extras::install_image_loaders;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::{browser::{fonts::load_fonts, tab::Tab}, gemtext_widget::{self, GemtextWidget}, DynResult};
+use crate::{browser::{fonts::load_fonts, tab::Tab}, gemtext_widget::{self}};
 
 pub fn main(url: String) -> eframe::Result {
     let opts = NativeOptions {

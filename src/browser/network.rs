@@ -4,14 +4,14 @@ pub mod http;
 pub mod file;
 pub mod gemini;
 
-use std::{borrow::Cow, fmt::Display, io, sync::{Arc, LazyLock}, time::Duration};
+use std::{borrow::Cow, fmt::Display, io, sync::{Arc, LazyLock}};
 
 use mime::Mime;
 use reqwest::header::ToStrError;
 use tokio::{runtime::Runtime, task::JoinHandle};
 use url::Url;
 
-use crate::{browser::network::{file::FileStatus, gemini::GeminiLoader, http::HttpLoader}, util::DisplayJoin as _};
+use crate::browser::network::{file::FileStatus, gemini::GeminiLoader, http::HttpLoader};
 
 // A global runtime to execute async tasks on.
 // The big benefit of async here is that tokio Tasks can be aborted at any time.

@@ -9,13 +9,8 @@ mod util;
 use std::error::Error;
 
 use clap::{builder::{styling::{Color, RgbColor, Style, Styles}}, Parser as _};
-use eframe::{
-    egui::{self, Context, Link, RichText, ScrollArea, TextEdit, TextStyle, Widget}, Frame, NativeOptions
-};
 
-use gemtext::Block;
 
-use crate::gemtext_widget::GemtextWidget;
 
 #[derive(clap::Parser, Debug)]
 #[command(name = "egemi", version, about, styles = CLAP_STYLING)]

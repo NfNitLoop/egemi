@@ -1,12 +1,11 @@
-use core::f32;
 
-use eframe::egui::{self, style::ScrollAnimation, text::{CCursor, CCursorRange}, vec2, Align2, Button, Color32, Frame, Image, Key, OpenUrl, ScrollArea, Shadow, Stroke, TextEdit};
-use egui_flex::{item, FlexAlign, FlexAlignContent};
+use eframe::egui::{self, style::ScrollAnimation, vec2, Button, Color32, Frame, Image, Key, OpenUrl, ScrollArea, Shadow, Stroke};
+use egui_flex::{item, FlexAlignContent};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, file::{self, FileStatus}, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg, widgets::textbox::TextBox};
+use crate::{browser::network::{self, file::{self}, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg, widgets::textbox::TextBox};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.

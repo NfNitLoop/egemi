@@ -4,7 +4,6 @@
 
 use std::{io::ErrorKind, os::unix::fs::MetadataExt as _, path::PathBuf, sync::Arc};
 
-use mime::Mime;
 use tokio::task::JoinHandle;
 use url::Url;
 

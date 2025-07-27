@@ -1,5 +1,5 @@
 
-use eframe::egui::{self, text::{CCursor, CCursorRange}, text_edit::TextEditOutput, Key, TextBuffer, TextEdit as TE, Ui, Widget};
+use eframe::egui::{self, text::{CCursor, CCursorRange}, text_edit::TextEditOutput, Key, TextEdit as TE, Ui, Widget};
 
 /// Implements select_all on a TextEdit::singleline().
 /// So that you don't have to grab TextEditOutput yourself.

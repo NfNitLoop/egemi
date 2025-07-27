@@ -1,4 +1,4 @@
-use eframe::{egui::{self, vec2, Align, FontId, Frame, Layout, Link, RichText, TextStyle, Ui, UiBuilder}, epaint::MarginF32};
+use eframe::{egui::{self, vec2, FontId, Frame, Link, RichText, TextStyle, Ui, UiBuilder}, epaint::MarginF32};
 
 use crate::gemtext::Block;
 
