@@ -17,7 +17,7 @@ eGemi doesn't have a binary distribution, but it's easy to build from source.
 
 If you want to build and install the `egemi` binary onto your system, instead run:
 
- * `cargo install --path . --release`
+ * `cargo install --path .`
 
 
 [welcome.gmi]: ./welcome.gmi
