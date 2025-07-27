@@ -6,6 +6,11 @@ Unlike other Gemini browsers, it allows you to browse Gemtext and plaintext via 
 
 See [welcome.gmi] for more details. 
 
+## Screenshots
+
+![Screenshot: v0.1.2 Welcome Page](./docs/screenshots/v0.1.2_welcome.png)
+![Screenshot: v0.1.2 Changelog in dark mode](./docs/screenshots/v0.1.2_changelog_dark.png)
+
 
 ## Installation
 
