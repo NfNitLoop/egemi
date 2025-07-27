@@ -53,7 +53,6 @@ pub struct Options {
 }
 
 const CODE_GUARD: &str = "```";
-const LINK: &str = "=> ";
 const BLOCK_QUOTE: &str = ">";
 
 impl Options {

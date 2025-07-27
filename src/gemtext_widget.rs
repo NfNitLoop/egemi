@@ -57,7 +57,7 @@ impl GemtextWidget {
                 Block::BlockQuote { lines } => {
                     block_quote(ui, lines);
                 },
-                Block::CodeFence { meta, lines } => {
+                Block::CodeFence { meta: _, lines } => {
                     for line in lines {
                         // ui.monospace(line);
                         let rt = RichText::new(line).text_style(Style::mono());

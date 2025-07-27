@@ -4,7 +4,7 @@ mod tab;
 
 use std::path::PathBuf;
 
-use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Frame, MenuBar, TopBottomPanel}, App, NativeOptions};
+use eframe::{egui::{self, global_theme_preference_buttons, gui_zoom::zoom_menu_buttons, CentralPanel, Frame, MenuBar, TopBottomPanel, ViewportBuilder}, App, NativeOptions};
 use egui_extras::install_image_loaders;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -54,7 +54,10 @@ fn try_file_url(url: String) -> String {
 /// May eventually support multiple tabs. For now, there's only ever one, which fills the whole screen.
 #[derive(Serialize, Deserialize, Debug)]
 struct Browser {
-    tab: Tab
+    tab: Tab,
+
+    // Allows us to toggle menu on/off
+    show_menu: bool,
 }
 
 impl Browser {
@@ -66,7 +69,9 @@ impl Browser {
         gemtext_widget::Style::config(&cc.egui_ctx);
 
         Self { 
-            tab: Tab::default()
+            tab: Tab::default(),
+            // On first load:
+            show_menu: false,
         }
     }
     
@@ -84,7 +89,16 @@ impl Browser {
                 if ui.button("Quit").clicked() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
-            })
+            });
+
+            // Not really meant to be rendered in a menu. (Closes w/ each click)
+            // ui.menu_button("Settings", |ui| {
+            //     ctx.settings_ui(ui);
+            // });
+
+            ui.menu_button("Zoom", |ui| {
+                zoom_menu_buttons(ui);
+            });
         });
     }
 }
@@ -93,7 +107,10 @@ impl Browser {
 
 impl App for Browser {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        TopBottomPanel::top("top panel").show(ctx, |ui| self.menu_bar(ctx, ui));
+        TopBottomPanel::top("top panel")
+            .show_animated(ctx, self.show_menu, |ui| {
+                self.menu_bar(ctx, ui)
+            });
 
         let frame = Frame::new()
             .outer_margin(0.0)
@@ -103,7 +120,11 @@ impl App for Browser {
         CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
-                self.tab.ui(ui);
+                let tab = self.tab.show(ui);
+                if tab.toggle_menu {
+                    self.show_menu = !self.show_menu;
+                }
+
             });
     }
 

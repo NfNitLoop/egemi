@@ -1,7 +1,24 @@
-use eframe::egui::{include_image, ImageSource};
+use eframe::egui::{self, include_image, Button, Image, ImageSource, Ui, Widget};
+
+
+pub fn back() -> SvgButton { SvgButton{ img: include_image!("material-symbols/arrow_back.svg") } }
+pub fn menu() -> SvgButton { SvgButton{ img: include_image!("material-symbols/menu.svg") } }
+pub fn reload() -> SvgButton { SvgButton { img: include_image!("material-symbols/refresh.svg") } }
+
+pub struct SvgButton {
+    img: Img,
+}
 
 pub type Img = ImageSource<'static>;
 
-pub fn back() -> Img {
-    include_image!("material-symbols/arrow_back_24dp_0000F5_FILL0_wght400_GRAD0_opsz24.svg")
+impl Widget for SvgButton {
+    fn ui(self, ui: &mut Ui) -> egui::Response {
+        let img = Image::new(self.img)
+            .max_height(18.0)
+            .tint(
+                // Match dark/light(/etc) theme.
+                ui.visuals().text_color(),
+            );
+        ui.add(Button::new(img))
+    }
 }

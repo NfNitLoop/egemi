@@ -41,7 +41,7 @@ impl MultiLoader {
     pub fn fetch(&self, url: SCow) -> JoinHandle<Result<LoadedResource>> {
         let parsed = match Url::parse(&url) {
             Ok(ok) => ok,
-            Err(err) => {
+            Err(_) => {
                 return async_err(Error::InvalidUrl(url))
             },
         };

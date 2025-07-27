@@ -1,11 +1,11 @@
 
-use eframe::egui::{self, style::ScrollAnimation, vec2, Button, Color32, Frame, Image, Key, OpenUrl, ScrollArea, Shadow, Stroke};
+use eframe::egui::{self, style::ScrollAnimation, vec2, Button, Color32, Frame, Image, Key, Modifiers, OpenUrl, ScrollArea, Shadow, Stroke, Ui, Vec2};
 use egui_flex::{item, FlexAlignContent};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, file::{self}, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg, widgets::textbox::TextBox};
+use crate::{browser::network::{self, file::{self}, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg::{self, menu}, widgets::textbox::TextBox};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -30,10 +30,13 @@ pub struct Tab {
 
     #[serde(skip)]
     scroll_to_top: bool,
+
+    #[serde(skip)]
+    toggle_menu: bool,
 }
 
 impl Tab {
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
+    pub fn show(&mut self, ui: &mut egui::Ui) -> TabResponse {
         self.check_tasks();
 
         self.location_bar_ui(ui);
@@ -59,12 +62,17 @@ impl Tab {
                     }
                 });
         });
+
+        TabResponse {
+            toggle_menu: { let tm = self.toggle_menu; self.toggle_menu = false; tm },
+        }
     }
 
     fn location_bar_ui(&mut self, ui: &mut egui::Ui) {
+        let frame_pad = 4.0;
         let frame = Frame::new()
             .fill(Color32::from_rgba_unmultiplied(200, 200, 200, 128))
-            .inner_margin(4.0)
+            .inner_margin(frame_pad)
             .outer_margin(0.0)
             .stroke(Stroke::new(0.0, Color32::WHITE))
             .shadow(Shadow::default())
@@ -78,25 +86,24 @@ impl Tab {
             let flex = egui_flex::Flex::horizontal()
                 .w_full()
                 .align_content(FlexAlignContent::Stretch)
-                .gap(old_spacing.clone())
+                .gap(Vec2::splat(frame_pad))
             ;
             flex.show(ui, |ui| {
                 let back_enabled = self.history.len() > 1;
-                let back_svg = Image::new(svg::back())
-                    .max_height(18.0)
-                    .tint(
-                        // Match dark/light(/etc) theme.
-                        ui.visuals().text_color()
-                    );
-                let button = ui.add(item().enabled(back_enabled), Button::new(back_svg));
-                if button.clicked() {
+                let back = ui.add_widget(item().enabled(back_enabled), svg::back());
+                if back.inner.clicked() {
                     self.go_back();
+                }
+
+                let reload = ui.add_widget(item(), svg::reload());
+                if reload.inner.clicked() || self.shortcuts.reload(ui.ui()) {
+                    self.reload();
                 }
 
                 let is_loading = self.is_loading();
                 let mut textbox = TextBox::new(self.location.to_mut())
                     .enabled(!is_loading);
-                ui.add_widget(item().grow(1.0), &mut textbox);
+                ui.add_widget(item().grow(1.0).shrink(), &mut textbox);
                 if textbox.enter_pressed(ui.ui()) {
                     self.goto_url(self.location.clone());
                 } else if textbox.lost_focus() {
@@ -111,12 +118,16 @@ impl Tab {
 
                 if is_loading {
                     ui.add_ui(item(), |ui| ui.spinner() );
-                }              
+                }
+
+                let toggle_menu = ui.add_widget(item(), menu());
+                if toggle_menu.inner.clicked() {
+                    self.toggle_menu = true;
+                }
             });
         });
 
         ui.style_mut().spacing.item_spacing = old_spacing;    
-
     }
 
     // Full URL entered in location bar, or set by app. 
@@ -131,9 +142,12 @@ impl Tab {
         self.history.push(url.clone());
         self.location = url.clone();
 
-        if url == BuiltinUrl::ABOUT {
-            self.set_gemtext(ABOUT_EGEMI.trim_start());
-            return
+        // TODO: Move the builtin loading to its own network/ loader.
+        for builtin in BuiltinUrl::ALL {
+            if builtin.url == url.as_ref() {
+                self.set_gemtext(builtin.text);
+                return;
+            }
         }
         
         let handle = self.loader.fetch(url);
@@ -172,6 +186,14 @@ impl Tab {
         // Easier to just pop the old URL and nagivate to it again like it's the first time:
         let url = self.history.pop().expect("previous url");
         self.goto_url(url);
+    }
+
+    pub fn reload(&mut self) {
+        // Right now there's no caching, so just 'goto' this URL again.
+        // When there's caching, we'll need to clear/invalidate cache first. Or fetch & replace.
+        if let Some(url) = self.history.pop() {
+            self.goto_url(url);
+        }
     }
 
     fn set_gemtext(&mut self, text: &str) {
@@ -327,7 +349,10 @@ impl Tab {
         // TODO: Proper URLencode. Avoid if unnecessary.
         self.location.replace(" ", "%20")
     }
+}
 
+pub struct TabResponse {
+    pub toggle_menu: bool
 }
 
 fn url_join(location: &str, url: &str) -> Result<Url, ()> {
@@ -336,13 +361,26 @@ fn url_join(location: &str, url: &str) -> Result<Url, ()> {
     Ok(joined)
 }
 
-struct BuiltinUrl;
+struct BuiltinUrl {
+    url: &'static str,
+    text: &'static str,
+}
 impl BuiltinUrl {
-    const ABOUT: &str = "about:egemi";
+    const ABOUT: Self = Self {
+        url: "about:egemi",
+        text: include_str!("../../welcome.gmi")
+    };
+    const CHANGELOG: Self = Self {
+        url: "about:changelog",
+        text: include_str!("../../changelog.gmi")
+    };
+
+    const ALL: &'static [BuiltinUrl] = &[
+        Self::ABOUT,
+        Self::CHANGELOG,
+    ];
 }
 
-
-const ABOUT_EGEMI: &str = include_str!("../../welcome.gmi");
 
 
 /// A place to check whether keyboard shortcuts were pressed.
@@ -352,9 +390,14 @@ struct Shortcuts;
 
 impl Shortcuts {
     fn location_bar(&self, ui: &egui::Ui) -> bool {
-        ui.input(|i| {
-            i.key_pressed(Key::L)
-            && (i.modifiers.ctrl || i.modifiers.command)
+        ui.input_mut(|i| {
+            i.consume_key(Modifiers::COMMAND, Key::L)
+        })
+    }
+
+    fn reload(&self, ui: &Ui) -> bool {
+        ui.input_mut(|i| {
+            i.consume_key(Modifiers::COMMAND, Key::R)
         })
     }
 }

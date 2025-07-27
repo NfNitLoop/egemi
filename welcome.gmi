@@ -5,11 +5,12 @@ eGemi's main differentiator from other Gemini browsers is that it can also read 
 
 ## Features
 * Can read gemtext over HTTP(S) as well as Gemini protocol.
-* Sends HTTP Accept headers requesting text/gemtext, text/markdown, and text/plain.
 * Single executable you can launch from the CLI.
 * Self-contained Rust application you can `cargo build` and `run` yourself.
 * Emoji! 🎉
 * CJK support: 日本語, 한국어, 简体中文, 繁體中文
+
+=> about:changelog Changelog
 
 ## Intentionally Missing Features
 While using HTTP, we can maintain some of the benefits of using Gemini Protocol by not implementing the parts of HTTP that are abused:
@@ -19,8 +20,6 @@ While using HTTP, we can maintain some of the benefits of using Gemini Protocol 
 * Automatic redirects (makes attempted click tracking obvious.)
 
 ## Upcoming Features
-* Allow browsing local gemtext files.
-* A reload button! 🔃 😅
 * Read a local bookmarks.gmi or home.gmi for quick access to common sites.
 
 ## Possible Future Features

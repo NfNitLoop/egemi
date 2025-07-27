@@ -1,0 +1,22 @@
+# Changelog
+
+## v0.1.2
+Released: 2024-07-27
+* 📂 Support for file:// URLs (w/ directory listings) 
+* 🔃 Reload button 
+* 👀 Menu bar hidden by default
+* 🔎 Zoom menu (discover egui's built-in zoom shortcuts)
+* 🤏 Location bar can resize even smaller
+
+## v0.1.1
+Released: 2024-07-26
+* ✨ Nicer fonts
+* 🗣️ CJK support: 日本語, 한국어, 简体中文, 繁體中文
+* 🆗 First SVG button icon (more to come...)
+
+## v0.1.0
+Released: 2024-07-24
+* 🎉 Initial release! 
+* 🚀 Gemini Protocol support
+* 🌐 HTTP(S) support
+* Sends HTTP `Accept` headers requesting text/gemtext, text/markdown, and text/plain.
