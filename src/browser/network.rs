@@ -1,16 +1,17 @@
 //! Handlers for fetching resources from the network.
 
 pub mod http;
+pub mod file;
 pub mod gemini;
 
-use std::{borrow::Cow, fmt::Display, sync::{Arc, LazyLock}, time::Duration};
+use std::{borrow::Cow, fmt::Display, io, sync::{Arc, LazyLock}, time::Duration};
 
 use mime::Mime;
 use reqwest::header::ToStrError;
 use tokio::{runtime::Runtime, task::JoinHandle};
 use url::Url;
 
-use crate::{browser::network::{gemini::GeminiLoader, http::HttpLoader}, util::DisplayJoin as _};
+use crate::{browser::network::{file::FileStatus, gemini::GeminiLoader, http::HttpLoader}, util::DisplayJoin as _};
 
 // A global runtime to execute async tasks on.
 // The big benefit of async here is that tokio Tasks can be aborted at any time.
@@ -33,6 +34,7 @@ pub fn rt() -> Arc<Runtime> {
 pub struct MultiLoader {
     http: Arc<HttpLoader>,
     gemini: Arc<GeminiLoader>,
+    file: Arc<file::FileLoader>,
 }
 
 impl MultiLoader {
@@ -47,6 +49,8 @@ impl MultiLoader {
             self.gemini.fetch(parsed)
         } else if parsed.scheme() == "http" || parsed.scheme() == "https" {
             self.http.fetch(&url)
+        } else if parsed.scheme() == "file" {
+            self.file.fetch(parsed)
         } else {
             async_err(Error::UnsupportedUrlScheme(parsed))
         }
@@ -67,7 +71,7 @@ pub type BCow = Cow<'static, [u8]>;
 
 /// Resource that has been completely loaded and is ready for synchronous use.
 #[derive(Debug)]
-pub  struct LoadedResource {
+pub struct LoadedResource {
     pub url: SCow,
 
     pub status: Status,
@@ -88,7 +92,9 @@ pub  struct LoadedResource {
 pub enum Status {
     HttpStatus {
         code: u16,
-    }
+    },
+
+    FileStatus(FileStatus),
 }
 
 impl Display for Status {
@@ -97,6 +103,7 @@ impl Display for Status {
             Status::HttpStatus { code } => {
                 write!(f, "HTTP {code}")
             },
+            Status::FileStatus(stat) => write!(f, "{stat:?}"),
         }
     }
 }
@@ -105,7 +112,8 @@ impl Status {
     pub fn ok(&self) -> bool {
         use Status::*;
         match self {
-            HttpStatus { code } => { 200 <= *code && *code < 300 }
+            HttpStatus { code } => { 200 <= *code && *code < 300 },
+            FileStatus(stat) => { stat == &file::FileStatus::Ok },
         }
     }
 }
@@ -130,6 +138,10 @@ pub enum Error {
     #[error("Unrequested Content-Type: {0}")]
     UnrequestedContentType(Mime),
 
+    #[error("Unsupported Content-Type: {0}")]
+    UnsupportedContentType(Mime),
+
+
     #[error("Missing Content-Type")]
     MissingContentType,
 
@@ -138,6 +150,9 @@ pub enum Error {
 
     #[error("Error parsing mime type {0}")]
     MimeParseError(#[from] mime::FromStrError),
+
+    #[error("I/O Error: {0}")]
+    IoError(#[from] io::Error),
 }
 
 impl From<reqwest::Error> for Error {
@@ -154,3 +169,11 @@ impl From <ToStrError> for Error {
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
+pub fn text_gemini() -> Arc<Mime> {
+    use std::sync::LazyLock;
+
+    static VALUE: LazyLock<Arc<Mime>> = LazyLock::new(|| {
+        "text/gemini".parse::<Mime>().expect("text/gemini").into()
+    });
+    return VALUE.clone()
+}

@@ -2,9 +2,12 @@ pub mod fonts;
 mod network;
 mod tab;
 
+use std::path::PathBuf;
+
 use eframe::{egui::{self, global_theme_preference_buttons, CentralPanel, Color32, FontData, FontFamily, Frame, MenuBar, TopBottomPanel}, epaint::text::{FontInsert, InsertFontFamily}, App, NativeOptions};
 use egui_extras::install_image_loaders;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::{browser::{fonts::load_fonts, tab::Tab}, gemtext_widget::{self, GemtextWidget}, DynResult};
 
@@ -13,6 +16,7 @@ pub fn main(url: String) -> eframe::Result {
         persist_window: true,
         ..Default::default()
     };
+    let url = try_file_url(url);
 
     eframe::run_native(
         "egemi",
@@ -24,6 +28,26 @@ pub fn main(url: String) -> eframe::Result {
             Ok(app)
         }),
     )
+}
+
+fn try_file_url(url: String) -> String {
+    if Url::parse(&url).is_ok() { 
+        return url;
+    }
+    let Ok(path) = PathBuf::from(&url).canonicalize() else {
+        return url;
+    };
+
+    let new_url = if path.is_dir() { 
+        Url::from_directory_path(path)
+    } else {
+        Url::from_file_path(path)
+    };
+    let Ok(new_url) = new_url else {
+        return url;
+    };
+    return new_url.to_string();
+
 }
 
 /// The main browser window.

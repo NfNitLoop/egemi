@@ -6,7 +6,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg, widgets::textbox::TextBox};
+use crate::{browser::network::{self, file::{self, FileStatus}, http::HttpLoader, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg, widgets::textbox::TextBox};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -46,10 +46,10 @@ impl Tab {
         ;
 
         frame.show(ui, |ui| {
-            ui.expand_to_include_rect(ui.available_rect_before_wrap());
             ScrollArea::vertical()
                 // .id_salt(&self.location) // No effect?
                 .show(ui, |ui| {
+                    ui.expand_to_include_rect(ui.available_rect_before_wrap());
                     if self.scroll_to_top {
                         ui.scroll_to_cursor_animation(None, ScrollAnimation::none());
                         self.scroll_to_top = false;
@@ -234,16 +234,26 @@ impl Tab {
         };
 
         if !loaded.status.ok() {
-            let status = &loaded.status;
-            let text = format!("## {status}") 
-                + "\n"
-                + "\nSee:"
-                + "\n=> https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status";
-            self.set_gemtext(&text);
-            return;
+            use network::Status::*;
+            match loaded.status {
+                HttpStatus { code } => {
+                    let text = format!("## HTTP {code}") 
+                        + "\n"
+                        + "\nSee:"
+                        + "\n=> https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status";
+                    self.set_gemtext(&text);
+                    return;
+                },
+                FileStatus(file::FileStatus::DirNeedsSlash) => {
+                    // continue to output.
+                },
+                FileStatus(status) => {
+                    let text = format!("## {status:?}");
+                    self.set_gemtext(&text);
+                    return;
+                },
+            }            
         }
-
-
 
         let is_text = match &loaded.content_type {
             None => {
@@ -296,6 +306,8 @@ impl Tab {
             | MimeParseError(_) 
             | UnsupportedUrlScheme(_)
             | InvalidUrl(_)
+            | IoError(_)
+            | UnsupportedContentType(_)
             | Unknown(_) => {
                 // Just show default error.
             },
@@ -317,19 +329,6 @@ impl Tab {
         self.location.replace(" ", "%20")
     }
 
-}
-
-// This feels like such a hack!
-fn select_all(output: egui::text_edit::TextEditOutput, text: &str, ui: &mut egui::Ui) {
-    let range = 0..text.len();
-    let mut output = output;
-    output.state.cursor.set_char_range(Some(CCursorRange {
-        // Note! "primary" is where selection "ended" and will be where the cursor appears.
-        secondary: CCursor { index: range.start, prefer_next_row: true },
-        primary: CCursor { index: range.end, prefer_next_row: true },
-        h_pos: None
-    }));
-    output.state.store(ui.ctx(), output.response.id);
 }
 
 fn url_join(location: &str, url: &str) -> Result<Url, ()> {
