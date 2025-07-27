@@ -13,7 +13,10 @@ use crate::{browser::network::{self, file::{self}, rt, LoadedResource, MultiLoad
 pub struct Tab {
     // What the user has currently entered into the location box.
     location: SCow,
-    history: Vec<SCow>, // urls
+
+    // urls:
+    history: Vec<SCow>, 
+    forward_history: Vec<SCow>,
 
     // TODO: In future I may make this a Box<dyn Widget> so we can swap in other renderers:
     #[serde(skip)]
@@ -89,18 +92,25 @@ impl Tab {
                 .gap(Vec2::splat(frame_pad))
             ;
             flex.show(ui, |ui| {
+                let is_loading = self.is_loading();
+
                 let back_enabled = self.history.len() > 1;
                 let back = ui.add_widget(item().enabled(back_enabled), svg::back());
                 if back.inner.clicked() {
                     self.go_back();
                 }
 
-                let reload = ui.add_widget(item(), svg::reload());
+                let fw_enabled = !self.forward_history.is_empty();
+                let fw = ui.add_widget(item().enabled(fw_enabled), svg::forward());
+                if fw.inner.clicked() {
+                    self.go_forward();
+                }
+
+                let reload = ui.add_widget(item().enabled(!is_loading), svg::reload());
                 if reload.inner.clicked() || self.shortcuts.reload(ui.ui()) {
                     self.reload();
                 }
 
-                let is_loading = self.is_loading();
                 let mut textbox = TextBox::new(self.location.to_mut())
                     .enabled(!is_loading);
                 ui.add_widget(item().grow(1.0).shrink(), &mut textbox);
@@ -130,8 +140,21 @@ impl Tab {
         ui.style_mut().spacing.item_spacing = old_spacing;    
     }
 
-    // Full URL entered in location bar, or set by app. 
+    // Full URL entered in location bar, or set by app.
     pub fn goto_url(&mut self, url: SCow) {
+        let fw_history_matches = self.forward_history.last().map(|it| it == &url).unwrap_or(false);
+        if fw_history_matches {
+            self.forward_history.pop();
+        } else {
+            self.forward_history.clear();
+        }
+
+        self.load_url(url);
+    }
+
+    /// Like goto_url(), but does NOT clear the forward_history.
+    /// You should prefer goto_url() for most cases.
+    fn load_url(&mut self, url: SCow) {
         if let Some(loading) = self.loading.take() {
             loading.abort();
             // (drop)
@@ -142,7 +165,7 @@ impl Tab {
         self.history.push(url.clone());
         self.location = url.clone();
 
-        // TODO: Move the builtin loading to its own network/ loader.
+        // TODO: Move the builtin loading to its own network/ loader module.
         for builtin in BuiltinUrl::ALL {
             if builtin.url == url.as_ref() {
                 self.set_gemtext(builtin.text);
@@ -151,7 +174,7 @@ impl Tab {
         }
         
         let handle = self.loader.fetch(url);
-        self.loading = Some(handle);        
+        self.loading = Some(handle);       
     }
 
     pub fn link_clicked(&mut self, ui: &egui::Ui, url: String) {
@@ -179,13 +202,22 @@ impl Tab {
             return;
         }
 
-        // TODO: Forward button support.
         // The top of history is the current URL:
-        self.history.pop().expect("drop current URL");
+        let current_url = self.history.pop().expect("drop current URL");
+        self.forward_history.push(current_url);
 
         // Easier to just pop the old URL and nagivate to it again like it's the first time:
         let url = self.history.pop().expect("previous url");
-        self.goto_url(url);
+        self.load_url(url);
+    }
+
+    pub fn go_forward(&mut self) {
+        let Some(next_url) = self.forward_history.pop() else {
+            eprintln!("Warning: Clicked forward button when no fw history available.");
+            return;
+        };
+
+        self.load_url(next_url);
     }
 
     pub fn reload(&mut self) {

@@ -4,6 +4,7 @@
 Released: 2024-07-27
 * 📂 Support for file:// URLs (w/ directory listings) 
 * 🔃 Reload button 
+* ➡️ Forward button
 * 👀 Menu bar hidden by default
 * 🔎 Zoom menu (discover egui's built-in zoom shortcuts)
 * 🤏 Location bar can resize even smaller
