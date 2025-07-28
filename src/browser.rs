@@ -4,7 +4,7 @@ mod tab;
 
 use std::path::PathBuf;
 
-use eframe::{egui::{self, global_theme_preference_buttons, gui_zoom::zoom_menu_buttons, CentralPanel, Frame, MenuBar, TopBottomPanel, ViewportBuilder}, App, NativeOptions};
+use eframe::{egui::{self, global_theme_preference_buttons, gui_zoom::zoom_menu_buttons, Button, CentralPanel, Checkbox, Frame, Key, KeyboardShortcut, Label, MenuBar, Modifiers, TopBottomPanel, ViewportBuilder}, App, NativeOptions};
 use egui_extras::install_image_loaders;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -52,12 +52,19 @@ fn try_file_url(url: String) -> String {
 
 /// The main browser window.
 /// May eventually support multiple tabs. For now, there's only ever one, which fills the whole screen.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 struct Browser {
     tab: Tab,
 
     // Allows us to toggle menu on/off
     show_menu: bool,
+    
+    #[serde(skip)]
+    debug_menu: bool,
+    #[serde(skip)]
+    debug_hover: bool,
+    #[serde(skip)]
+    debug_text_bounds: bool,
 }
 
 impl Browser {
@@ -68,11 +75,7 @@ impl Browser {
         // TODO: Better themes:
         gemtext_widget::Style::config(&cc.egui_ctx);
 
-        Self { 
-            tab: Tab::default(),
-            // On first load:
-            show_menu: false,
-        }
+        Self::default()
     }
     
     fn goto_url(&mut self, url: String) {
@@ -85,8 +88,16 @@ impl Browser {
                 if ui.button("About").clicked() {
                     self.goto_url("about:egemi".into());
                 }
+
+                // TODO: A better place to put this?
                 global_theme_preference_buttons(ui);
-                if ui.button("Quit").clicked() {
+
+                ui.checkbox(&mut self.debug_menu, "Debug");
+
+                let quit_sc = KeyboardShortcut::new(Modifiers::COMMAND, Key::Q);
+                let quit = Button::new("Quit").shortcut_text(ctx.format_shortcut(&quit_sc));
+                let quit = ui.add(quit);
+                if quit.clicked() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
@@ -99,11 +110,27 @@ impl Browser {
             ui.menu_button("Zoom", |ui| {
                 zoom_menu_buttons(ui);
             });
+            
+            if self.debug_menu {
+                ui.menu_button("Debug", |ui| self.debug_menu(ui) );
+            }
+
         });
     }
+    
+    fn debug_menu(&mut self, ui: &mut egui::Ui) {
+        #[cfg(debug_assertions)]
+        if ui.checkbox(&mut self.debug_hover, "Hover").changed() {
+            ui.ctx().set_debug_on_hover(self.debug_hover);
+        }
+        if ui.checkbox(&mut self.debug_text_bounds, "Text Bounds").changed() {
+            ui.ctx().tessellation_options_mut(|opts| {
+                opts.debug_paint_text_rects = self.debug_text_bounds;
+            });
+
+        }    
+    }
 }
-
-
 
 impl App for Browser {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
