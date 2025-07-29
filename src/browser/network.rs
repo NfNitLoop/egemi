@@ -66,6 +66,7 @@ fn async_err(err: Error) -> JoinHandle<Result<LoadedResource>> {
 
 
 // TODO: Worth using a strings/bytes crate for these?
+// TODO: Definitely. I'd incorrectly understood Cow as also providing refcounts & cheap clones. 🤦‍♂️
 pub type SCow = Cow<'static, str>;
 pub type BCow = Cow<'static, [u8]>;
 
@@ -153,6 +154,9 @@ pub enum Error {
 
     #[error("I/O Error: {0}")]
     IoError(#[from] io::Error),
+
+    #[error("Max allowed response size was {max_length} bytes, but got {content_length}")]
+    ResponseTooBig { content_length: u64, max_length: u64 },
 }
 
 impl From<reqwest::Error> for Error {

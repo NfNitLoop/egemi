@@ -1,6 +1,7 @@
 use eframe::{egui::{self, vec2, Color32, FontId, Frame, Link, RichText, Sense, TextStyle, Ui, UiBuilder, Vec2}, epaint::MarginF32};
 
-use crate::gemtext::Block;
+use crate::{browser::widgets::DocWidget, gemtext::Block};
+use crate::browser::widgets::DocumentResponse as Response;
 
 #[derive(Default, Debug)]
 pub struct GemtextWidget {
@@ -13,24 +14,28 @@ pub struct GemtextWidget {
     link_clicked: Option<String>, // "url", but may not parse as such.
 }
 
-impl GemtextWidget {
-    pub fn ui(&mut self, ui: &mut Ui) -> Response {
-        // Assuming we're in a top-down layout, because that's all that really makes sense:
-        let mut layout = *ui.layout();
-        layout.cross_justify = self.justify;
+impl DocWidget for GemtextWidget {
+    fn ui(&mut self, ui: &mut Ui) -> Response {
+    // Assuming we're in a top-down layout, because that's all that really makes sense:
+    let mut layout = *ui.layout();
+    layout.cross_justify = self.justify;
 
-        ui.with_layout(layout, |ui| {
-            // It turns out, the text renderer puts plenty of space.
-            // But leaving spacing around every line, especially blank lines, made for a very whitespace-heavy feel.
-            ui.spacing_mut().item_spacing = Vec2::ZERO;
+    ui.with_layout(layout, |ui| {
+        // It turns out, the text renderer puts plenty of space.
+        // But leaving spacing around every line, especially blank lines, made for a very whitespace-heavy feel.
+        ui.spacing_mut().item_spacing = Vec2::ZERO;
 
-            self.render(ui)
-        });
+        self.render(ui)
+    });
 
-        Response {
-            link_clicked: self.link_clicked.take(),
-        }
+    Response {
+        link_clicked: self.link_clicked.take(),
     }
+}
+
+}
+
+impl GemtextWidget {
 
     fn render(&mut self, ui: &mut Ui) {
         let mut line_num: u32 = 0;
@@ -88,11 +93,6 @@ impl GemtextWidget {
     pub fn set_blocks(&mut self, blocks: Vec<Block>) {
         self.blocks = blocks;
     }
-}
-
-/// Returned by [`GemtextWidget::ui`] so you can access events.
-pub struct Response {
-    pub link_clicked: Option<String>
 }
 
 

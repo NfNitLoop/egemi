@@ -5,7 +5,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::{browser::network::{self, file::{self}, rt, LoadedResource, MultiLoader, SCow}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg::{self, menu}, widgets::textbox::TextBox};
+use crate::{browser::{network::{self, file::{self}, rt, LoadedResource, MultiLoader, SCow}, widgets::{markdown, DocWidget}}, gemtext::{self, Block}, gemtext_widget::GemtextWidget, svg::{self, menu}, widgets::textbox::TextBox};
 
 /// A single tab in the browser.
 /// Each tab has its own history and URL.
@@ -18,9 +18,8 @@ pub struct Tab {
     history: Vec<SCow>, 
     forward_history: Vec<SCow>,
 
-    // TODO: In future I may make this a Box<dyn Widget> so we can swap in other renderers:
     #[serde(skip)]
-    document: GemtextWidget,
+    document: Option<Box<dyn DocWidget>>,
 
     #[serde(skip)]
     loading: Option<JoinHandle<network::Result<LoadedResource>>>,
@@ -59,7 +58,11 @@ impl Tab {
                         ui.scroll_to_cursor_animation(None, ScrollAnimation::none());
                         self.scroll_to_top = false;
                     }
-                    let response = self.document.ui(ui);
+                    let Some(document) = self.document.as_mut()  else {
+                        return;
+                    };
+                    let doc_ref = document.as_mut();
+                    let response = doc_ref.ui(ui);
                     if let Some(url) = response.link_clicked {
                         self.link_clicked(ui, url);
                     }
@@ -241,14 +244,17 @@ impl Tab {
                 ]
             },
         };
-        self.document.set_blocks(blocks);
+        let mut new_doc = GemtextWidget::default();
+        new_doc.set_blocks(blocks);
+        self.document = Some(Box::new(new_doc));
         self.scroll_to_top = true;
     }
 
     fn set_plaintext(&mut self, text: &str) {
         let blocks: Vec<Block> = text.lines().map(|line| Block::Text(line.into())).collect();
-        self.document.set_blocks(blocks);
-        self.scroll_to_top = true;
+        let mut new_doc = GemtextWidget::default();
+        new_doc.set_blocks(blocks);
+        self.document = Some(Box::new(new_doc));        self.scroll_to_top = true;
     }
     
     /// Check if any async tasks completed. Right now, this is just whether a page loaded.
@@ -337,9 +343,13 @@ impl Tab {
             network::Body::Text(cow) => cow,
         };
 
-        let is_gemtext = loaded.content_type.map(|it| it.essence_str() == "text/gemini").unwrap_or(false);
-        if is_gemtext {
+        let essence = loaded.content_type.as_ref().map(|it| it.essence_str());
+        if let Some("text/gemini") = essence {
             self.set_gemtext(&body);
+        } else if let Some("text/html") = essence {
+            self.render_html(body);
+        } else if let Some("text/markdown") = essence {
+            self.render_markdown(body)
         } else {
             self.set_plaintext(&body);
         }
@@ -364,6 +374,11 @@ impl Tab {
             | Unknown(_) => {
                 // Just show default error.
             },
+            e @ ResponseTooBig{..} => {
+                let text = format!("## Response too big\n\n{e:?}");
+                self.set_gemtext(&text);
+                return;
+            },
             UnrequestedContentType(mime) => {
                 let text = format!("## Unrequested Content-Type\n\n```\nContent-Type: {mime}\n```\n")
                 + "=> browser+" + &self.encoded_location() + " Open in web browser";
@@ -381,7 +396,21 @@ impl Tab {
         // TODO: Proper URLencode. Avoid if unnecessary.
         self.location.replace(" ", "%20")
     }
+    
+    fn render_html(&mut self, body: SCow) {
+        let out = parse_html(body.clone());
+    }
+
+    fn render_markdown(&mut self, body: SCow) {
+        let new_doc = markdown::MarkdownWidget::for_md(&body);
+        self.document = Some(Box::new(new_doc));
+    }
 }
+
+fn parse_html(body: SCow) {
+    todo!();
+}
+
 
 pub struct TabResponse {
     pub toggle_menu: bool

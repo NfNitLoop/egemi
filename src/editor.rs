@@ -3,7 +3,7 @@
 
 use eframe::{egui::{self, Context, ScrollArea, TextEdit, TextStyle}, Frame, NativeOptions};
 
-use crate::{browser::fonts::load_fonts, gemtext::{self, Block}, gemtext_widget::{self, GemtextWidget}};
+use crate::{browser::{fonts::load_fonts, widgets::DocWidget as _}, gemtext::{self, Block}, gemtext_widget::{self, GemtextWidget}};
 
 pub fn main() -> eframe::Result {
     let opts = NativeOptions {

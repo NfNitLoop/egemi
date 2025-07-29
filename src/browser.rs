@@ -1,6 +1,8 @@
 pub mod fonts;
 mod network;
+mod parsers;
 mod tab;
+pub mod widgets;
 
 use std::path::PathBuf;
 
@@ -12,6 +14,8 @@ use url::Url;
 use crate::{browser::{fonts::load_fonts, tab::Tab}, gemtext_widget::{self}};
 
 pub fn main(url: String) -> eframe::Result {
+    env_logger::init();
+
     let opts = NativeOptions {
         persist_window: true,
         ..Default::default()

@@ -12,11 +12,10 @@ use crate::{browser::network::{rt, Body, LoadedResource, Status}, util::DisplayJ
 /// Knows how to load http/https.
 #[derive(Debug)]
 pub struct HttpLoader {
-    // TODO: Re-use a client to get HTTP/2 & 3 speedups.
 
-    max_size: Option<usize>,
+    max_size: Option<u64>,
 
-    // TODO: WHen we support multiple tabs, we could just make a global client? LazyLock.
+    // TODO: When we support multiple tabs, we could just make a global client? LazyLock.
     client: reqwest::Client,
 
     // Which content types to request. If we don't get one of these back, then error out fast.
@@ -26,7 +25,7 @@ pub struct HttpLoader {
 impl Default for HttpLoader {
     fn default() -> Self {
         Self { 
-            max_size: Some(1024*1024 * 100), // 100 MiB
+            max_size: Some(1024 * 1024 * 100), // 100 MiB
             client: reqwest::Client::builder()
                 .connect_timeout(Duration::from_secs(10))
                 .user_agent(USER_AGENT)
@@ -37,7 +36,8 @@ impl Default for HttpLoader {
                 "text/gemini; q=1",
                 "text/markdown; q=0.9",
                 "text/plain; q=0.8",
-                // TODO: text/html once we can scrape actual text out of it.
+                "text/*; q=0.7",
+                "*/*; q=0.1"
             ].into_iter().map(|it| it.parse().expect("parsing mime")).collect(),
         }
     }
@@ -75,29 +75,26 @@ impl HttpLoader {
             }
         };
 
-        // TODO: Check too big.
+        // !!! NOT THIS
+        // let length = response.content_length(); // LIES
+        let length = response.headers()
+            .get("content-length")
+            .map(|it| it.to_str().ok()).flatten()
+            .map(|it| it.parse::<u64>().ok()).flatten()
+        ;
+        if let (Some(length), Some(max_len)) = (length, self.max_size) {
+            if length > max_len {
+                return Err(Error::ResponseTooBig{ content_length: length, max_length: max_len })
+            }
+        }
 
         // TODO: binary.
-        let length = response.content_length();
+        // TODO: Some things report application/octet-stream when they don't know the mime type.
+        // Could try to second-guess the type from the file extension.
         let status = Status::HttpStatus { 
             code: response.status().as_u16()
         };
         
-        // For statuses like 301 or 404, we want to return the status code, and don't care
-        // so much about the content. But for OK responses, we expect the content to be a type we requested.
-        // If it's not, don't bother fetching it, return early.
-        if status.ok() {
-            let Some(mime) = &ctype else {
-                return Err(Error::MissingContentType);
-            };
-            let type_match = self.accept_content_types.iter().any(|mt| {
-                mt.essence_str() == mime.essence_str()
-            });
-            if !type_match {
-                Err(Error::UnrequestedContentType(mime.clone()))?;
-            }
-        }
-
         let text = response.text().await?;
 
 

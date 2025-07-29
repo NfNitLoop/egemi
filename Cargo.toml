@@ -18,3 +18,15 @@ thiserror = "2.0.12"
 tokio = { version = "1.46.1", features = ["fs", "rt", "rt-multi-thread"] }
 url = "2.5.4"
 mime_guess = "2.0.5"
+scraper = "0.23.1"
+html5ever = "0.35.0"
+kuchiki = "0.8.1"
+tl = "0.7.8"
+html2md = "0.2.15"
+indoc = "2.0.6"
+log = "0.4.27"
+env_logger = "0.11.8"
+pulldown-cmark = "0.13.0"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
