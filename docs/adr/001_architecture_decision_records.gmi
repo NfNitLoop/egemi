@@ -1,0 +1,9 @@
+# Architecture Decision Records
+
+2025-08-09
+
+An ADR captures the reasons behind an architectural decision made during application development.
+
+They're a good idea to help others learn why things are they way they are.
+
+Or, to help yourself remember why you decided things if you're forgetful like this author. :)

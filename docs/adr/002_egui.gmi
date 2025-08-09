@@ -1,0 +1,40 @@
+# Why egui?
+
+2025-08-09
+
+I briefly doubted my initial decision to use egui, but I think it's the right decision for now.
+
+## egui
+
+### Pros:
+* Great docs
+* Mac/Linux/Windows/Web compatibility. (Though we are not targeting web for eGemi)
+* very thorough example application (https://egui.rs)
+* Built-in support for (non-native) menus.
+* Built-in keyboard navigation for selecting interactive widgets. (!!! ❤️)
+* text widgets (labels) are selectable by default, which gives select/copy functionality for free.
+* Support for dark/light mode following system preferences.
+
+### Cons:
+* Known issues with immediate-mode GUIs.
+* (relatedly) No native flexbox-like layout. (though: egui_flex seems to be working well enough)
+
+## Iced
+
+### Pros:
+* Multiple built-in themes
+* Supports flexbox-like layouts.
+* Native support for async tasks.
+
+### Cons: 
+* No support for menus yet.
+* text isn't selectable
+* No keyboard support for widgets.
+* Explicitly documented as experimental, and will break compatibility between releases.
+
+## Slint
+
+### Cons:
+* Licensing
+* Based on QT. (Which is a nice system, but adds complications to the build dependencies)
+
