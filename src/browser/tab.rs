@@ -398,17 +398,14 @@ impl Tab {
     }
     
     fn render_html(&mut self, body: SCow) {
-        let out = parse_html(body.clone());
+        let new_doc = markdown::MarkdownWidget::for_html(&body);
+        self.document = Some(Box::new(new_doc));
     }
 
     fn render_markdown(&mut self, body: SCow) {
         let new_doc = markdown::MarkdownWidget::for_md(&body);
         self.document = Some(Box::new(new_doc));
     }
-}
-
-fn parse_html(body: SCow) {
-    todo!();
 }
 
 

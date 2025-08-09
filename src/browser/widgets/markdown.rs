@@ -1,10 +1,11 @@
-use eframe::egui::{self, Align, Layout, RichText, Ui, Vec2};
+use eframe::{egui::{self, Align, Color32, Frame, Layout, RichText, TextStyle, Ui, UiBuilder, Vec2}, epaint::MarginF32};
 use log::debug;
 use pulldown_cmark::{Tag, TagEnd};
 
-use crate::{browser::{network::SCow, parsers::html::to_md, widgets::DocWidget}, gemtext_widget::Style};
+use crate::{browser::{network::SCow, parsers::html::to_md, widgets::{markdown::tree::{Block, Inline}, DocWidget}}, gemtext_widget::Style};
 
 use super::DocumentResponse;
+mod tree;
 
 #[derive(Debug)]
 pub struct MarkdownWidget {
@@ -12,7 +13,7 @@ pub struct MarkdownWidget {
     // https://github.com/emilk/egui/issues/1272
     justify: bool,
 
-    parsed: Parsed,
+    parsed: tree::Parsed,
     link_clicked: Option<String>,
 }
 
@@ -23,49 +24,100 @@ impl MarkdownWidget {
     }
 
     pub fn for_md(md: &str) -> Self {
+        let parsed = tree::Parser::from_md(md);
+        debug!("Parsed markdown: {parsed:#?}");
         Self {
             justify: false,
-            parsed: Parser::from_md(md),
+            parsed,
             link_clicked: None,
         }
     }
+    
+
 }
 
 impl MarkdownWidget {
     fn render(&mut self, ui: &mut Ui) {
-        let mut block_num: u64 = 0;
-        for block in &self.parsed.blocks {
+        self.render_blocks(ui, &self.parsed.blocks);
+        ui.label("");
+    }
+
+    fn render_blocks(&self, ui: &mut Ui, blocks: &[Block]) {
+        let last_block_num = blocks.len();
+        let mut block_num = 0;
+        for block in blocks {
             block_num += 1;
-            match block {
-                Block::Heading { level, text } => {
-                    let is_title = block_num == 1 && *level == 1;
-                    let style = if is_title { Style::title() } else { Style::heading(*level) };
-                    let rt = RichText::new(text).text_style(style).strong();
-                    if is_title {
-                        ui.vertical_centered(|ui| {
-                            ui.label(rt);
-                        });
-                    } else {
-                        ui.label(rt);
+            let last_block = block_num == last_block_num;
+            self.render_block(ui, block);
+            
+            let is_pseudo = matches!(block, Block::PseudoP { .. });
+            if !last_block && !is_pseudo { self.line_spacing(ui); }
+        }
+    }
+
+    fn render_block(&self, ui: &mut Ui, block: &Block) {
+        match block {
+            Block::Heading { level, text } => {
+                let style = Style::heading(*level);
+                let rt = RichText::new(text).text_style(style).strong();
+                ui.label(rt);
+            },
+            Block::CodeBlock { text, .. } => {
+                let rt = RichText::new(text).text_style(Style::mono());
+                ui.label(rt);
+            },
+            Block::BlockQuote { blocks } => {
+                self.render_bq(ui, blocks);
+            },
+            Block::P { parts } | Block::PseudoP { parts } => {
+                ui.horizontal_wrapped(|ui| {
+                    let response = self.render_inline(ui, parts);
+                    if let Some(link_clicked) = response {
+                        // self.link_clicked = Some(link_clicked);
                     }
-                    self.line_spacing(ui);
-                },
-                Block::Pre { text } => {
-                    // ui.monospace(line);
-                    let rt = RichText::new(text).text_style(Style::mono());
-                    ui.label(rt);
-                },
-                Block::BlockQuote { blocks } => {
-                    // TODO
-                },
-                Block::P { parts } => {
-                    ui.horizontal_wrapped(|ui| {
-                        let response = self.render_inline(ui, parts);
-                        if let Some(link_clicked) = response {
-                            // self.link_clicked = Some(link_clicked);
-                        }
+                });
+            },
+            Block::List { start_num, blocks } => {
+                self.render_list(ui, start_num.clone(), blocks);
+            },
+            Block::ListItem { .. } => {
+                // ListItems should always appear directly in a List, right?
+                ui.colored_label(Color32::from_rgb(255, 0, 0), "Error: Unexpected ListItem outside of List");
+            },
+            Block::Hr => {
+                ui.separator();
+            }
+        }
+    }
+    
+    fn render_list(&self, ui: &mut Ui, start_num: Option<u64>, blocks: &[Block]) {
+        let mut start_num = start_num;
+        for block in blocks {
+            match block {
+                Block::List { start_num, blocks } => {
+                    // TODO: Adjust indentation.
+                    ui.indent("list", |ui| {
+                        self.render_list(ui, start_num.clone(), blocks);
                     });
-                    self.line_spacing(ui);
+                },
+                Block::ListItem { blocks } => {
+                    let bullet = if let Some(num) = &mut start_num {
+                        let out = format!("{num}. ");
+                        *num += 1;
+                        out
+                    } else {
+                        " • ".to_string()
+                    };
+                    ui.horizontal_top(|ui| {
+                        ui.label(bullet);
+                        ui.vertical(|ui| {
+                            self.render_blocks(ui, blocks);
+                        })
+                    });
+                },
+                block => {
+                    // Shouldn't happen? But if so, just render:
+                    ui.label(format!("Unexpected block in List: {block:?}"));
                 }
             }
         }
@@ -97,6 +149,25 @@ impl MarkdownWidget {
 
         link_clicked
     }
+
+    fn render_bq(&self, ui: &mut Ui, blocks: &[Block]) {
+        let builder = UiBuilder::new();
+        let row_height = ui.text_style_height(&TextStyle::Body);
+        let left_margin = MarginF32{ left: row_height / 2.0, ..Default::default() };
+        let response = ui.scope_builder(builder, |ui| {
+            let frame = Frame::new()
+                .outer_margin(left_margin);
+            frame.show(ui, |ui| {
+                self.render_blocks(ui, blocks);
+            });
+
+        });
+        let rect = response.response.rect;
+        ui.painter().line_segment(
+            [rect.left_top(), rect.left_bottom()],
+            (1.0, ui.visuals().weak_text_color()),
+        );
+    }
 }
 
 impl DocWidget for MarkdownWidget {
@@ -121,222 +192,3 @@ impl DocWidget for MarkdownWidget {
     }
 }
 
-/// pulldown-commonmark gives a parser as an iterator, but no way to serialize the parsed document.
-/// Which means we would have to re-parse it with every render to screen. Booo.
-/// Instead, let's parse the parts of Markdown we want to support into a flat format, which we can quickly (re)render.
-/// 
-#[derive(Debug)]
-struct Parsed {
-    // TODO: title: Option<String>
-
-    blocks: Vec<Block>
-}
-
-struct Parser {
-    // may one day have options for how to parse text? Or do we want to put the options on the rendering side?)
-}
-
-impl Parser {
-    fn from_html(html: &str) -> Parsed {
-        let md = to_md(html);
-        Parser::from_md(&md)
-    }
-
-    fn from_md(md: &str) -> Parsed {
-        let mut parser = pulldown_cmark::Parser::new(&md);
-        let mut blocks: Vec<Block> = vec![];
-
-        use pulldown_cmark::Event::*;
-        while let Some(event) = parser.next() {
-            match event {
-                Start(tag) => {
-                    match tag {
-                        Tag::Paragraph => {
-                            blocks.push(Self::parse_p(&mut parser));
-                        },
-
-                        tag @ Tag::Heading { level, ..} => {
-                            blocks.push(Self::parse_heading(&mut parser, level));
-                        },
-                        tag @ Tag::BlockQuote(block_quote_kind) => {
-                            eprintln!("TODO: {tag:?}");
-                        },
-                        tag @ Tag::CodeBlock(_) => {
-                            eprintln!("TODO: {tag:?}");
-                        },
-                        tag @ Tag::HtmlBlock => {
-                            eprintln!("TODO: {tag:?}");
-                        },
-                        tag @ Tag::List(_) => {
-                            eprintln!("TODO: {tag:?}");
-                        },
-                        tag @ Tag::Item => {
-                            eprintln!("TODO: {tag:?}");
-                        },
-
-                        tag @ Tag::DefinitionList
-                        | tag @ Tag::DefinitionListTitle
-                        | tag @ Tag::DefinitionListDefinition
-                        | tag @ Tag::Table(_)
-                        | tag @ Tag::TableHead
-                        | tag @ Tag::TableRow
-                        | tag @ Tag::TableCell => {
-                            // We haven't enabled these.
-                            blocks.push(format!("Unexpected tag: {tag:?}").into());
-                        },
-
-                        tag @ Tag::Emphasis
-                        | tag @ Tag::Strong
-                        | tag @ Tag::Strikethrough
-                        | tag @ Tag::Superscript
-                        | tag @ Tag::Subscript
-                        | tag @ Tag::Link { .. }
-                        | tag @ Tag::Image { .. }
-                        | tag @ Tag::MetadataBlock(_) => {
-                            eprintln!("TODO: {tag:?}");
-                        },
-
-                        tag @ Tag::FootnoteDefinition(_) => {
-                            blocks.push(format!("Unsupported tag: {tag:?}").into());
-                        },
-                    }
-                },
-                item @ Text(_)
-                | item @ End(_)
-                | item @ Code(_)
-                | item @ InlineMath(_)
-                | item @ DisplayMath(_)
-                | item @ Html(_)
-                | item @ InlineHtml(_)
-                | item @ FootnoteReference(_)
-                | item @ SoftBreak
-                | item @ HardBreak
-                | item @ Rule
-                | item @ TaskListMarker(_) => {
-                    let msg = format!("Unimplemented top-level item: {item:?}");
-                    blocks.push(msg.into());
-                },
-            }
-        }
-
-        Parsed { blocks }
-    }
-    
-    fn parse_p(parser: &mut pulldown_cmark::Parser<'_>) -> Block {
-        let mut parts: Vec<Inline> = vec![];
-
-        while let Some(event) = parser.next() {
-            use pulldown_cmark::Event::*;
-            match event {
-                End(tag) if tag == TagEnd::Paragraph => {
-                    // HTML paragraphs can't be nested.
-                    // Any end paragraph means we're done parsing this paragraph.
-                    break;
-                }
-                Start(tag) => {
-                    eprintln!("TODO: Start tag: {tag:?}")
-                },
-                End(tag_end) => {
-                    eprintln!("TODO: End tag: {tag_end:?}")
-                },
-                Text(cow_str) => {
-                    parts.push(Inline::Text(cow_str.into()))
-                },
-                Code(cow_str) => {
-                    // TODO: Inline code support.
-                    parts.push(Inline::Text(cow_str.into()))
-                },
-
-                // None of these are really supported but we'll just display them rather than hiding them:
-                InlineMath(cow_str)
-                | DisplayMath(cow_str)
-                | Html(cow_str)
-                | InlineHtml(cow_str)
-                | FootnoteReference(cow_str) => {
-                    parts.push(Inline::Text(cow_str.into()))
-                },
-
-
-                SoftBreak => {
-                    parts.push(" ".to_string().into());
-                },
-                HardBreak => parts.push(Inline::Br),
-                tag @ Rule => {
-                    // Shouldn't really be part of a paragraph?
-                    let msg = format!("Unexpected tag: {tag:?}");
-                    parts.push(msg.into());
-                },
-                tlm @ TaskListMarker(checked) => {
-                    // Shouldn't ever happen since we disabled it, but be verbose if it does:
-                    let text = format!("{tlm:?}");
-                    parts.push(Inline::Text(text));
-                },
-            }
-        }
-
-        Block::P{ parts }
-    }
-    
-    fn parse_heading(parser: &mut pulldown_cmark::Parser<'_>, level: pulldown_cmark::HeadingLevel) -> Block {
-        use pulldown_cmark::HeadingLevel::*;
-        let level = match level {
-            H1 => 1,
-            H2 => 2,
-            H3 => 3,
-            H4 => 4,
-            H5 => 5,
-            H6 => 6,
-        };
-        let mut text = String::new();
-
-        while let Some(event) = parser.next() {
-            use pulldown_cmark::Event::*;
-            match event {
-                End(TagEnd::Heading(_)) => break,
-                Text(cow_str) => text.push_str(&cow_str),
-                
-                event => {
-                    debug!("Skipping unsupported heading event: {event:?}");
-                }
-            }
-        }
-
-        Block::Heading { level, text }
-    }
-}
-
-/// A parsed, top-level block of markdown.
-#[derive(Debug)]
-enum Block {
-    Heading{ level: u8, text: String },
-    Pre{ text: String },
-    BlockQuote {
-        blocks: Vec<Block>
-    },
-    P{ 
-        parts: Vec<Inline>
-    },
-}
-
-/// Mostly usedu for debugging unexpected Markdown formats.
-impl From<String> for Block {
-    fn from(value: String) -> Self {
-        Block::P { parts: vec![
-            Inline::Text(value)
-        ] }
-    }
-}
-
-#[derive(Debug)]
-enum Inline {
-    Br,
-    Text(String),
-    Link{ text: String, href: String }
-}
-
-// Mostly for debug errors.
-impl From<String> for Inline {
-    fn from(value: String) -> Self {
-        Inline::Text(value)
-    }
-}

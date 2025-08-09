@@ -16,7 +16,8 @@ use crate::browser::network::{file::FileStatus, gemini::GeminiLoader, http::Http
 // A global runtime to execute async tasks on.
 // The big benefit of async here is that tokio Tasks can be aborted at any time.
 // Otherwise, an egui app is synchronous.
-
+//
+// TODO: Maybe move this to a crate. Add a wrapper that automatically aborts tasks on drop.
 pub fn rt() -> Arc<Runtime> {
     static RT: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
         let rt = tokio::runtime::Builder::new_multi_thread()
