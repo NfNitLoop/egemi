@@ -139,15 +139,18 @@ impl MarkdownWidget {
             match part {
                 Inline::Text(text) => { 
                     let mut text = RichText::new(text);
-                    if (self.text_italics) {
+                    if self.text_italics {
                         text = text.italics();
                     }
-                    if (self.text_bold) {
+                    if self.text_bold {
                         text = text.strong();
                     }
         
                     ui.label(text); 
                 },
+                Inline::Code(text) => {
+                    ui.monospace(text);
+                }
                 Inline::Link(tree::Link{ text, href }) => {
                     let link = egui::Link::new(text);
                     let response = ui.add(link);

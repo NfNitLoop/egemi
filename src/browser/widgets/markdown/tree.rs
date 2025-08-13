@@ -131,6 +131,10 @@ impl <'a> Parser<'a> {
                     blocks.push_inline(Inline::Text("\n".into()))
                 },
 
+                Code(mono) => {
+                    blocks.push_inline(Inline::Code(mono.into()));
+                },
+
                 item @ End(_)
                 | item @ Code(_)
                 | item @ InlineMath(_)
@@ -276,9 +280,11 @@ impl <'a> Parser<'a> {
                     href: dest_url.clone().into(),
                 }),
 
-                styled @ Inline::Styled { .. } => {
+                inner @ Inline::Code(_)
+                | inner @ Inline::Styled { .. } 
+                => {
                     // TODO: I don't believe egui supports styled links.
-                    let text = styled.extract_text();
+                    let text = inner.extract_text();
                     Inline::Link(Link{
                         text,
                         href: dest_url.clone().into(),
@@ -385,6 +391,7 @@ impl From<String> for Block {
 #[derive(Debug)]
 pub enum Inline {
     Text(String),
+    Code(String),
     Link(Link),
     
     /// Just a normal Markdown(/HTML) image. We make these links so you can browse to the image itself to view it.
@@ -404,6 +411,7 @@ impl Inline {
     fn extract_text(&self) -> String {
         match self {
             Inline::Text(text) => text.into(),
+            Inline::Code(text) => text.into(),
             Inline::Link(Link{ text, href: _ }) => text.into(),
             Inline::Image(Image{ src, alt: _, title: _ }) => src.into(),
             Inline::LinkedImage { image, link: _ } => image.src.clone(),
