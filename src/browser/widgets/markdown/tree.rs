@@ -83,13 +83,33 @@ impl <'a> Parser<'a> {
                             blocks.push(format!("Unexpected tag: {tag:?}").into());
                         },
 
-                        tag @ Tag::Emphasis
-                        | tag @ Tag::Strong
-                        | tag @ Tag::Strikethrough
+                        Tag::Emphasis => {
+                            let inline = Inline::Styled {
+                                style:  Style::Italics,
+                                parts: self.parse_inline(&|end| end == TagEnd::Emphasis)
+                            };
+                            blocks.push_inline(inline);
+                        },
+                        Tag::Strong => {
+                            let inline = Inline::Styled {
+                                style:  Style::Bold,
+                                parts: self.parse_inline(&|end| end == TagEnd::Strong)
+                            };
+                            blocks.push_inline(inline);
+                        },
+                        Tag::Link { link_type, dest_url, title, id } => {
+                            for inline in self.parse_link(link_type, dest_url, title, id) {
+                                blocks.push_inline(inline);
+                            }
+                        },
+                        Tag::Image { id, dest_url, link_type: _, title } => {
+                            blocks.push_inline(self.parse_image(dest_url, title, id));
+                        },
+
+
+                        tag @ Tag::Strikethrough
                         | tag @ Tag::Superscript
                         | tag @ Tag::Subscript
-                        | tag @ Tag::Link { .. }
-                        | tag @ Tag::Image { .. }
                         | tag @ Tag::MetadataBlock(_) => {
                             eprintln!("TODO: {tag:?}");
                         },
@@ -100,7 +120,16 @@ impl <'a> Parser<'a> {
                 },
                 Rule => {
                     blocks.push(Block::Hr);
-                }
+                },
+
+                SoftBreak => {
+                    // TODO: Check whether we need this space. (Collapse spaces)
+                    blocks.push_inline(Inline::Text(" ".into()))
+                },
+                HardBreak => {
+                    // TODO: Check whether we need this space. (Collapse spaces)
+                    blocks.push_inline(Inline::Text("\n".into()))
+                },
 
                 item @ End(_)
                 | item @ Code(_)
@@ -109,11 +138,9 @@ impl <'a> Parser<'a> {
                 | item @ Html(_)
                 | item @ InlineHtml(_)
                 | item @ FootnoteReference(_)
-                | item @ SoftBreak
-                | item @ HardBreak
                 | item @ TaskListMarker(_) => {
-                    let msg = format!("Unimplemented top-level item: {item:?}");
-                    blocks.push(msg.into());
+                    let msg = format!("(Unimplemented top-level item: {item:?})");
+                    blocks.push_inline(msg.into());
                 },
             }
         }
@@ -122,7 +149,7 @@ impl <'a> Parser<'a> {
     }
     
     fn parse_p(&mut self) -> Block {
-        let parts: Vec<Inline> = self.parse_inline(|tag| tag == TagEnd::Paragraph);
+        let parts: Vec<Inline> = self.parse_inline(&|tag| tag == TagEnd::Paragraph);
         Block::P{ parts }
     }
 
@@ -134,59 +161,25 @@ impl <'a> Parser<'a> {
         }
     }
 
-
-
     // Reusable inline parser.
-    fn parse_inline(&mut self, end_condition: impl Fn(TagEnd) -> bool) -> Vec<Inline> {
-        let mut parts: Vec<Inline> = vec![];
+    fn parse_inline(&mut self, end_condition: &dyn Fn(TagEnd) -> bool) -> Vec<Inline> {
+        // Re-use the block-level parsing:
+        let blocks = self.parse_blocks_until(end_condition);
 
-        while let Some(event) = self.inner.next() {
-            use pulldown_cmark::Event::*;
-            match event {
-                End(tag) if end_condition(tag) => { break; }
-                event @ Start(_) => {
-                    parts.push(format!("(TODO: {event:?})").into());
+        // But we expect to only get inline items in this context, so check & extract those:
+        let mut inlines: Vec<Inline> = vec![];
+        for block in blocks {
+            match block {
+                Block::PseudoP { parts } => {
+                    inlines.extend(parts);
                 },
-                event @ End(_) => {
-                    parts.push(format!("(TODO: {event:?})").into());
-                },
-                Text(cow_str) => {
-                    parts.push(Inline::Text(cow_str.into()))
-                },
-                Code(cow_str) => {
-                    // TODO: Inline code support.
-                    parts.push(Inline::Text(cow_str.into()))
-                },
-
-                // None of these are really supported but we'll just display them rather than hiding them:
-                InlineMath(cow_str)
-                | DisplayMath(cow_str)
-                | Html(cow_str)
-                | InlineHtml(cow_str)
-                | FootnoteReference(cow_str) => {
-                    parts.push(Inline::Text(cow_str.into()))
-                },
-
-
-                SoftBreak => {
-                    // TODO: Check previous/next parts and don't add a space if it's unnecssary. (Collapse spaces)
-                    parts.push(" ".to_string().into());
-                },
-                HardBreak => parts.push(Inline::Br),
-                tag @ Rule => {
-                    // Shouldn't really be part of a paragraph?
-                    let msg = format!("Unexpected tag: {tag:?}");
-                    parts.push(msg.into());
-                },
-                tlm @ TaskListMarker(_) => {
-                    // Shouldn't ever happen since we disabled it, but be verbose if it does:
-                    let text = format!("{tlm:?}");
-                    parts.push(Inline::Text(text));
-                },
+                block => {
+                    inlines.push(format!("(Unexpected Inline Block: {block:?})").into());
+                }
             }
         }
 
-        parts
+        inlines
     }
 
     fn parse_list(&mut self, start_num: Option<u64>) -> Block {
@@ -260,6 +253,83 @@ impl <'a> Parser<'a> {
             text: strings.join(""),
         }
     }
+    
+    fn parse_link(
+        &mut self, 
+        _link_type: pulldown_cmark::LinkType,
+        dest_url: pulldown_cmark::CowStr<'_>,
+        _title: pulldown_cmark::CowStr<'_>,
+        _id: pulldown_cmark::CowStr<'_>
+    ) -> Vec<Inline> {
+        let mut out: Vec<Inline> = vec![];
+
+        let parts = self.parse_inline(&|end| end == TagEnd::Link);
+
+        // An HTML link can span multiple other elements, ex:
+        // <a href="foo">Some text <img src="bar"/> Some more text</a>
+        // But that complicates rendering. We'll just duplicate the link across all inner elements.
+
+        for part in parts {
+            out.push(match part {
+                Inline::Text(text) => Inline::Link(Link{
+                    text,
+                    href: dest_url.clone().into(),
+                }),
+
+                styled @ Inline::Styled { .. } => {
+                    // TODO: I don't believe egui supports styled links.
+                    let text = styled.extract_text();
+                    Inline::Link(Link{
+                        text,
+                        href: dest_url.clone().into(),
+                    })
+                },
+                Inline::Image(image @ Image{ .. }) => {
+                    Inline::LinkedImage{
+                        image: image.clone(),
+                        link: Link { text: "".into(), href: dest_url.clone().into() }
+                    }
+                }
+                inline @ Inline::LinkedImage { .. }
+                | inline @ Inline::Link { .. } => Inline::Link(Link{
+                    text: format!("Unexpected within link: {inline:?}").into(),
+                    href: dest_url.clone().into(),
+                }),
+            });
+        }
+        out
+    }
+    
+    fn parse_image(&mut self, dest_url: pulldown_cmark::CowStr<'_>, title: pulldown_cmark::CowStr<'_>, id: pulldown_cmark::CowStr<'_>) -> Inline {
+        let parts = self.parse_inline(&|end| end == TagEnd::Image);
+        let mut alt: String = if parts.is_empty() {
+            "".into()
+        } else if parts.len() > 1 {
+            format!("(Error: Too many inline elements: {parts:?})")
+        } else {
+            let part = parts.into_iter().next().expect("Exactly 1 element");
+            let text = match part {
+                Inline::Text(text) => text,
+                inline => { format!("(Error: Unexpected inline element in image: {inline:?})") }
+            };
+            text
+        };
+
+        if alt.is_empty() {
+            // Given ![][foo], fall back to foo as the alt text.
+            alt = id.into();
+        }
+        if alt.is_empty() {
+            // TODO: Trim this:
+            alt = dest_url.clone().into();    
+        }
+
+        Inline::Image(Image{ 
+            src: dest_url.into(),
+            alt,
+            title: title.into()
+        })
+    }
 }
 
 /// A parsed, top-level block of markdown.
@@ -314,9 +384,59 @@ impl From<String> for Block {
 
 #[derive(Debug)]
 pub enum Inline {
-    Br,
     Text(String),
-    Link{ text: String, href: String }
+    Link(Link),
+    
+    /// Just a normal Markdown(/HTML) image. We make these links so you can browse to the image itself to view it.
+    Image(Image),
+
+    /// An image that had a link in the original markdown, so we need to display 2 links.
+    /// Note: link.text will be empty.
+    LinkedImage { link: Link, image: Image },
+
+    Styled {
+        style: Style,
+        parts: Vec<Inline>
+    },
+
+}
+impl Inline {
+    fn extract_text(&self) -> String {
+        match self {
+            Inline::Text(text) => text.into(),
+            Inline::Link(Link{ text, href: _ }) => text.into(),
+            Inline::Image(Image{ src, alt: _, title: _ }) => src.into(),
+            Inline::LinkedImage { image, link: _ } => image.src.clone(),
+            Inline::Styled { parts, style: _} => {
+                parts.into_iter()
+                    .map(|part| part.extract_text())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            },
+        }
+    }
+}
+
+/// A simple text link.
+#[derive(Clone, Debug)]
+pub struct Link {
+    pub href: String,
+    pub text: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Image {
+    pub src: String,
+    /// Displayed instead of the image. (egemi won't display images inline)
+    pub alt: String,
+    /// Displayed on hover.
+    pub title: String, 
+}
+
+#[derive(Debug)]
+pub enum Style {
+    Bold,
+    Italics,
 }
 
 // Mostly for debug errors.

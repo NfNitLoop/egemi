@@ -27,7 +27,6 @@ struct SkipTag;
 
 impl TagHandler for SkipTag {
     fn handle(&mut self, tag: &Handle, _printer: &mut StructuredPrinter) { 
-        eprintln!("Skipping tag: {:#?}", tag.data);
         debug!("Skipping tag: {:#?}", tag.data);
     }
 
@@ -44,3 +43,7 @@ impl TagHandlerFactory for SkipTagFactory {
         Box::new(SkipTag)
     }
 }
+
+
+// TODO: Investigate better html -> markdown processing:
+// https://docs.rs/htmd/latest/
