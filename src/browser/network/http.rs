@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use mime::Mime;
+use reqwest::redirect::Policy;
 use tokio::task::JoinHandle;
 
 use super::{Result, Error};
@@ -29,6 +30,8 @@ impl Default for HttpLoader {
             client: reqwest::Client::builder()
                 .connect_timeout(Duration::from_secs(10))
                 .user_agent(USER_AGENT)
+                // Let the user see that redirects are happening and opt in:
+                .redirect(Policy::none())
                 .build()
                 .expect("Building reqwest client"),
             accept_content_types: [
@@ -88,11 +91,20 @@ impl HttpLoader {
             }
         }
 
+        let code = response.status().as_u16();
+        if response.status().is_redirection() {
+            if let Some(Ok(dest)) = response.headers().get("location").map(|it| it.to_str()) {
+                return Err(Error::Redirect { 
+                    destination: dest.into(), 
+                    temporary: code != 301
+                });
+            }
+        }
         // TODO: binary.
         // TODO: Some things report application/octet-stream when they don't know the mime type.
         // Could try to second-guess the type from the file extension.
         let status = Status::HttpStatus { 
-            code: response.status().as_u16()
+            code
         };
         
         let text = response.text().await?;

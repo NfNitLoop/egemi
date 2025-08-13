@@ -374,6 +374,13 @@ impl Tab {
                 self.set_gemtext(&text);
                 return;
             },
+            Redirect{destination, temporary: _} => {
+                let dest = destination.replace(" ", "%20");
+                self.set_gemtext(&format!(
+                    "## Redirect\n\nThe server would like to redirect you to:\n=> {dest}"
+                ));
+                return
+            }
         };
         
         let msg = format!("{err:#?}");

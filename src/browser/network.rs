@@ -158,6 +158,10 @@ pub enum Error {
 
     #[error("Max allowed response size was {max_length} bytes, but got {content_length}")]
     ResponseTooBig { content_length: u64, max_length: u64 },
+
+    #[error("Redirect")]
+    Redirect{ destination: String, temporary: bool }
+    
 }
 
 impl From<reqwest::Error> for Error {
