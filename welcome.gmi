@@ -32,7 +32,7 @@ While using HTTP, we can maintain some of the benefits of using Gemini Protocol 
 * RSS/(/gemlog/twtxt?) support.
 
 ### See:
-=> browser+https://github.com/nfnitloop/egemi @nfnitloop/egemi on GitHub
+=> https://github.com/nfnitloop/egemi @nfnitloop/egemi on GitHub
 => gemini://geminiprotocol.net/
 
 ### Author Links:

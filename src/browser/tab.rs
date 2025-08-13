@@ -181,15 +181,6 @@ impl Tab {
     }
 
     pub fn link_clicked(&mut self, ui: &egui::Ui, url: String) {
-        // Handle browser+ links:
-        if let Some(url) = url.strip_prefix("browser+") {
-            ui.ctx().open_url(OpenUrl{
-                url: url.into(),
-                new_tab: false
-            });
-            return;
-        }
-
         if let Ok(joined) = url_join(&self.location, &url) {
             self.goto_url(joined.to_string().into());
             return;
@@ -331,7 +322,6 @@ impl Tab {
             let msg = format!("## Unsupported Content-Type\n\n")
                 + &format!("Content-Type: {content}\n")
                 + "is not yet supported.\n\n"
-                + "=> browser+" + &self.encoded_location() + " Open in browser?"
             ;
 
             self.set_gemtext(&msg);
@@ -380,8 +370,7 @@ impl Tab {
                 return;
             },
             UnrequestedContentType(mime) => {
-                let text = format!("## Unrequested Content-Type\n\n```\nContent-Type: {mime}\n```\n")
-                + "=> browser+" + &self.encoded_location() + " Open in web browser";
+                let text = format!("## Unrequested Content-Type\n\n```\nContent-Type: {mime}\n```\n");
                 self.set_gemtext(&text);
                 return;
             },
