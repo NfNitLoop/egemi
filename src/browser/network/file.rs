@@ -2,7 +2,7 @@
 //! This loader loads files from disk. 
 //! If the path is a directory, it will return a gemtext directory listing.
 
-use std::{io::ErrorKind, os::unix::fs::MetadataExt as _, path::PathBuf, sync::Arc};
+use std::{io::ErrorKind, path::PathBuf, sync::Arc};
 
 use tokio::task::JoinHandle;
 use url::Url;
@@ -46,7 +46,7 @@ impl FileLoader {
         let mebibyte: u64 = 1024 * 1024;
 
         if stat.is_file() {
-            let bytes = stat.size();
+            let bytes = stat.len();
             if bytes > 30 * mebibyte {
                 return Err(Error::Unknown(format!("File too large: {bytes} bytes")));
             }
