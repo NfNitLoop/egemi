@@ -1,6 +1,9 @@
 
-use eframe::egui::{self, style::ScrollAnimation, vec2, Button, Color32, Frame, Image, Key, Modifiers, OpenUrl, ScrollArea, Shadow, Stroke, Ui, Vec2};
+use std::time::{Instant, SystemTime};
+
+use eframe::egui::{self, style::ScrollAnimation, vec2, Button, Color32, Frame, Image, Key, Modifiers, OpenUrl, ScrollArea, Shadow, Stroke, TextBuffer, Ui, Vec2};
 use egui_flex::{item, FlexAlignContent};
+use log::{debug, warn};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
@@ -30,8 +33,10 @@ pub struct Tab {
     #[serde(skip)]
     shortcuts: Shortcuts,
 
+    /// Each time we load a new doc, we give it a new id hash, so that we can reset any
+    /// of egui's mutable state that was saved for the previous doc.
     #[serde(skip)]
-    scroll_to_top: bool,
+    doc_id: u128,
 
     #[serde(skip)]
     toggle_menu: bool,
@@ -50,14 +55,9 @@ impl Tab {
         ;
 
         frame.show(ui, |ui| {
-            ScrollArea::vertical()
-                // .id_salt(&self.location) // No effect?
-                .show(ui, |ui| {
+            ui.push_id(self.doc_id, |ui| {
+                ScrollArea::vertical().show(ui, |ui| {
                     ui.expand_to_include_rect(ui.available_rect_before_wrap());
-                    if self.scroll_to_top {
-                        ui.scroll_to_cursor_animation(None, ScrollAnimation::none());
-                        self.scroll_to_top = false;
-                    }
                     let Some(document) = self.document.as_mut()  else {
                         return;
                     };
@@ -67,6 +67,7 @@ impl Tab {
                         self.link_clicked(ui, url);
                     }
                 });
+            });
         });
 
         TabResponse {
@@ -186,7 +187,6 @@ impl Tab {
             return;
         }
                 
-        // TODO: Relative resolution.
         self.goto_url(url.into());
     }
 
@@ -238,14 +238,15 @@ impl Tab {
         let mut new_doc = GemtextWidget::default();
         new_doc.set_blocks(blocks);
         self.document = Some(Box::new(new_doc));
-        self.scroll_to_top = true;
+        self.doc_id = time_hash();
     }
 
     fn set_plaintext(&mut self, text: &str) {
         let blocks: Vec<Block> = text.lines().map(|line| Block::Text(line.into())).collect();
         let mut new_doc = GemtextWidget::default();
         new_doc.set_blocks(blocks);
-        self.document = Some(Box::new(new_doc));        self.scroll_to_top = true;
+        self.document = Some(Box::new(new_doc));
+        self.doc_id = time_hash();
     }
     
     /// Check if any async tasks completed. Right now, this is just whether a page loaded.
@@ -404,6 +405,17 @@ impl Tab {
     }
 }
 
+fn time_hash() -> u128 {
+    let dur = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(dur) => dur,
+        Err(err) => {
+            warn!("Error fetching SystemTime for hash: {err:?}");
+            std::time::Duration::default()
+        },
+    };
+    
+    dur.as_millis()
+}
 
 pub struct TabResponse {
     pub toggle_menu: bool
